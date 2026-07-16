@@ -14,6 +14,14 @@ const MODES = new Set(['normal', 'lost']);
 const PAIR_TTL_MS = 5 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 3600 * 1000;
 const MAX_BLOB_BYTES = 64 * 1024;
+// Retention: sealed reports are kept 7 days — enough to review recent
+// movement, bounded so the DB (all ciphertext) never grows without limit.
+const REPORT_RETENTION_MS = 7 * 24 * 3600 * 1000;
+
+/** Delete sealed reports older than maxAgeMs. Exposed for scheduling + tests. */
+export function pruneOldReports(db, maxAgeMs = REPORT_RETENTION_MS) {
+  return db.query('DELETE FROM reports WHERE received_at < $1', [Date.now() - maxAgeMs]);
+}
 
 const now = () => Date.now();
 const sha256hex = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -82,6 +90,12 @@ export function createApp({
 
   const q = (text, params) => db.query(text, params).then((r) => r.rows);
   const one = async (text, params) => (await q(text, params))[0];
+
+  // Enforce report retention: sweep on boot, then every 6h. unref() so the
+  // timer never keeps the process (or a test runner) alive.
+  const sweepReports = () => pruneOldReports(db).catch(() => {});
+  sweepReports();
+  setInterval(sweepReports, 6 * 3600 * 1000).unref?.();
 
   const accountKey = (steamid64) => hmacHex(pepper, steamid64); // §2.3 — raw SteamID never stored
   // Admin is gated by the account_key of a fixed SteamID (still no raw

@@ -15,6 +15,7 @@ def build_report(state, active_scan: bool, with_bt: bool) -> dict:
         "ts": int(time.time() * 1000),
         "wifi": fmsd_scan.wifi_scan(active=active_scan),
         "bt": fmsd_scan.bt_scan() if with_bt else [],
+        "ssid": fmsd_scan.connected_ssid(),
         "batt": fmsd_scan.battery_level(),
         "flag_ack": state.data["last_applied_counter"],
     }

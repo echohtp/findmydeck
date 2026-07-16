@@ -74,9 +74,26 @@ function markerIcon(latest) {
   });
 }
 
+// Markers for the currently plotted fixes, index-aligned with the fixes
+// array (newest-first) so the history list can focus any one of them.
+let fixMarkers = [];
+
+function fixPopupHtml(f, latest, meta) {
+  const when = new Date(f.ts).toLocaleString();
+  return `<div style="min-width:160px">
+      <b style="color:${latest ? '#f2585b' : '#38bdf8'}">${latest ? '📍 Latest position' : 'Earlier position'}</b><br>
+      ${meta.name ? `<b>${esc(meta.name)}</b><br>` : ''}
+      ${when}<br>
+      Accuracy ±${Math.round(f.accuracy)} m
+      ${f.ssid ? `<br>Wi-Fi “${esc(f.ssid)}”` : ''}
+      ${f.batt >= 0 ? `<br>Battery ${Math.round(f.batt * 100)}%` : ''}
+    </div>`;
+}
+
 function plotFixes(fixes, meta = {}) {
   ensureMap();
   layerGroup.clearLayers();
+  fixMarkers = [];
   if (!fixes.length) { map.setView([20, 0], 2); return; }
   const pts = fixes.map((f) => [f.lat, f.lon]); // newest-first
   if (pts.length > 1) {
@@ -87,20 +104,22 @@ function plotFixes(fixes, meta = {}) {
     const latest = i === 0;
     L.circle([f.lat, f.lon], { radius: f.accuracy, color: latest ? '#f2585b' : '#38bdf8', weight: 1, opacity: 0.4, fillOpacity: 0.06 }).addTo(layerGroup);
     const mk = L.marker([f.lat, f.lon], { icon: markerIcon(latest) }).addTo(layerGroup);
-    const when = new Date(f.ts).toLocaleString();
-    mk.bindPopup(`<div style="min-width:160px">
-        <b style="color:${latest ? '#f2585b' : '#38bdf8'}">${latest ? '📍 Latest position' : 'Earlier position'}</b><br>
-        ${meta.name ? `<b>${esc(meta.name)}</b><br>` : ''}
-        ${when}<br>
-        Accuracy ±${Math.round(f.accuracy)} m
-        ${f.batt >= 0 ? `<br>Battery ${Math.round(f.batt * 100)}%` : ''}
-      </div>`);
+    mk.bindPopup(fixPopupHtml(f, latest, meta));
+    fixMarkers[i] = mk;
     if (latest) latestMarker = mk;
   });
   // Zoom out a touch so the pin sits in context, not glued to the max zoom.
   if (pts.length > 1) map.fitBounds(pts, { padding: [160, 160], maxZoom: 15 });
   else map.setView(pts[0], 14);
   setTimeout(() => { map.invalidateSize(); if (latestMarker) latestMarker.openPopup(); }, 60);
+}
+
+// Pan to a plotted fix and open its popup (used by the history list).
+function focusFix(i) {
+  const mk = fixMarkers[i];
+  if (!mk) return;
+  map.setView(mk.getLatLng(), Math.max(map.getZoom(), 15), { animate: true });
+  mk.openPopup();
 }
 
 // -------------------------------------------------------------- crypto
@@ -172,66 +191,187 @@ function btRecurrence(reports) {
 
 // ============================================================ views
 function renderLogin() {
+  // Cinematic hero: a live dark map with an animated radar pin and a decrypted
+  // trail leading into it, echoing the product. Glass panels float above.
   ensureMap();
+  layerGroup.clearLayers();
+  const hero = [30.2672, -97.7431];
+  // Center west of the pin so the radar sits in the visible right half,
+  // clear of the left hero panel — a "mission control" look.
+  map.setView([hero[0], hero[1] - 0.019], 15, { animate: false });
+  // A decrypted-looking trail leading into the live radar pin.
+  const trail = [
+    [30.2607, -97.7392], [30.2631, -97.7405], [30.2653, -97.7419], [hero[0], hero[1]],
+  ];
+  L.polyline(trail, { color: '#38bdf8', weight: 2.5, opacity: 0.7, dashArray: '3 8' }).addTo(layerGroup);
+  trail.slice(0, -1).forEach((p) =>
+    L.marker(p, { icon: markerIcon(false), interactive: false }).addTo(layerGroup));
+  L.circle(hero, { radius: 140, color: '#f2585b', weight: 1, opacity: 0.35, fillColor: '#f2585b', fillOpacity: 0.05 }).addTo(layerGroup);
+  L.marker(hero, { icon: radarIcon(), interactive: false }).addTo(layerGroup);
+  setTimeout(() => map.invalidateSize(), 60);
+
+  injectLoginFx();
   const feature = (icon, title, body) => `
-    <div class="glass" style="padding:20px;flex:1;min-width:220px">
-      <div style="font-size:28px">${icon}</div>
-      <div style="font-weight:700;font-size:18px;margin:6px 0 4px">${title}</div>
-      <div class="muted">${body}</div>
+    <div class="lf-feat">
+      <div class="lf-feat-ic">${icon}</div>
+      <div><div class="lf-feat-t">${title}</div><div class="muted lf-feat-b">${body}</div></div>
     </div>`;
-  const step = (n, title, body) => `
-    <div style="display:flex;gap:14px;align-items:flex-start">
-      <div style="flex:none;width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:800;display:grid;place-items:center">${n}</div>
-      <div><div style="font-weight:600">${title}</div><div class="muted">${body}</div></div>
-    </div>`;
+  const chip = (t) => `<span class="lf-chip">${t}</span>`;
 
+  // pointer-events:none on the scrim lets the map stay pannable; each panel
+  // re-enables events so its controls work.
   app.replaceChildren(h(`
-    <div style="position:fixed;inset:0;z-index:20;overflow-y:auto;
-                background:radial-gradient(1100px 600px at 50% -5%, rgba(20,38,58,.94), rgba(10,15,24,.97) 60%)">
-      <div style="max-width:920px;margin:0 auto;padding:6vh 20px 40px">
+    <div class="lf-root">
+      <div class="lf-glow"></div>
+      <div class="lf-wrap">
 
-        <header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8vh">
+        <header class="glass lf-nav">
           <div class="brand"><span class="logo">🛰</span> Find My Deck</div>
-          <a href="/auth/steam"><button class="primary">Sign in with Steam</button></a>
+          <div class="row" style="gap:10px">
+            <a href="https://github.com/echohtp/findmydeck" target="_blank" rel="noopener"><button class="ghost lf-gh">★ GitHub</button></a>
+            <a href="/auth/steam"><button class="primary">Sign in with Steam</button></a>
+          </div>
         </header>
 
-        <div style="text-align:center;max-width:720px;margin:0 auto">
-          <div style="font-size:56px">🛰</div>
-          <h1 style="font-size:40px;line-height:1.1;margin:12px 0 10px">Find your Steam Deck.<br>Even if someone took it.</h1>
-          <p style="font-size:18px" class="muted">
-            A zero-knowledge anti-theft plugin. The server stores only ciphertext it can't read —
-            location and control belong to you and your password alone.
-          </p>
-          <div style="margin-top:22px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
-            <a href="/auth/steam"><button class="primary" style="font-size:16px;padding:12px 22px">Sign in with Steam</button></a>
-            <a href="/findmydeck-plugin.zip"><button style="font-size:16px;padding:12px 22px">Download the plugin</button></a>
+        <div class="lf-hero">
+          <div class="glass lf-card">
+            <div class="lf-eyebrow"><span class="lf-live"></span> ZERO-KNOWLEDGE · FIND MY DEVICE</div>
+            <h1 class="lf-h1">Find your Steam&nbsp;Deck.<br><span class="lf-grad">Nobody else can.</span></h1>
+            <p class="muted lf-sub">
+              A find-my-device plugin for the Deck, built zero-knowledge. Your Deck seals its own
+              location — the server stores ciphertext it can’t read, and only your password unlocks it.
+            </p>
+            <div class="lf-cta">
+              <a href="/auth/steam"><button class="primary lf-primary">Sign in with Steam</button></a>
+              <a href="/findmydeck-plugin.zip"><button class="lf-ghost2">↓ Download the plugin</button></a>
+            </div>
+            <div class="lf-chips">
+              ${chip('🔒 Sealed reports')}${chip('🗺 Decrypts in your browser')}${chip('🔑 Your key alone')}
+            </div>
+            <div class="lf-feats">
+              ${feature('🗺️', 'See where it’s been', 'Sealed Wi-Fi scans decrypt only in your browser, then plot a trail on the map.')}
+              ${feature('📢', 'Ring &amp; recover', 'Play a sound to find it nearby, or flip it to Lost with a private finder chat.')}
+              ${feature('🔒', 'Only you hold the key', 'Your password derives the keys. A full server breach still can’t track a thing.')}
+            </div>
           </div>
         </div>
 
-        <div style="display:flex;gap:14px;flex-wrap:wrap;margin:9vh 0 0">
-          ${feature('🗺️', 'Locate on a map', 'Sealed Wi-Fi scans decrypt only in your browser, then plot a live trail — the server never sees where your Deck is.')}
-          ${feature('📢', 'Ring & recover', 'Play a sound to find it nearby, or flip it to Lost for a full-screen banner and a private chat with whoever has it.')}
-          ${feature('🔒', 'Only you hold the key', 'Your password derives the keys that decrypt reports and sign commands. A full server breach still can’t read or track a thing.')}
-        </div>
-
-        <div class="glass" style="padding:26px;margin-top:22px">
-          <h2 style="margin-top:0;font-size:24px">How it works</h2>
-          <div style="display:flex;flex-direction:column;gap:16px;margin-top:14px">
-            ${step(1, 'Install the Decky plugin', 'On your Steam Deck, install from URL and enroll with a 6-digit pair code.')}
-            ${step(2, 'Pick a recovery password', 'Derived on-device into keys that never leave it. We literally cannot reset it — that’s the point.')}
-            ${step(3, 'Lose it? Locate, ring, or chat', 'From here you track it on a map, ring it, or open a private line to an honest finder — no personal details shared.')}
-          </div>
-        </div>
-
-        <p class="faint" style="text-align:center;margin-top:28px">
+        <p class="faint lf-foot">
           Zero-knowledge by design · Steam login only reveals your public ID · Your password is unrecoverable on purpose
         </p>
       </div>
     </div>`));
 }
 
+// Animated radar pin for the hero map — expanding rings + a glowing core.
+function radarIcon() {
+  return L.divIcon({
+    className: '', iconSize: [44, 44], iconAnchor: [22, 22],
+    html: `<div class="lf-radar"><span class="lf-ring"></span><span class="lf-ring lf-ring2"></span><span class="lf-core"></span></div>`,
+  });
+}
+
+let loginFxInjected = false;
+function injectLoginFx() {
+  if (loginFxInjected) return;
+  loginFxInjected = true;
+  document.head.append(h(`<style>
+    .lf-root{position:fixed;inset:0;z-index:20;overflow-y:auto;pointer-events:none;
+      background:linear-gradient(90deg, rgba(7,10,18,.94) 0%, rgba(7,10,18,.86) 32%, rgba(7,10,18,.45) 62%, rgba(7,10,18,.18) 100%)}
+    .lf-glow{position:fixed;top:-24vh;left:8vw;width:70vw;height:70vh;pointer-events:none;
+      background:radial-gradient(closest-side, rgba(56,189,248,.14), transparent 70%);filter:blur(24px)}
+    .lf-wrap{min-height:100%;display:flex;flex-direction:column;padding:18px clamp(14px,4vw,44px) 24px;box-sizing:border-box}
+    .lf-nav{pointer-events:auto;display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-radius:14px}
+    .lf-gh{font-size:13px}
+    .lf-hero{flex:1;display:flex;align-items:center;justify-content:flex-start;padding:4vh 0}
+    .lf-card{pointer-events:auto;max-width:480px;width:100%;padding:clamp(26px,3.4vw,40px);text-align:left;position:relative;
+      border-radius:22px;box-shadow:0 30px 90px rgba(0,0,0,.6);animation:lf-rise .7s cubic-bezier(.2,.8,.2,1) both}
+    .lf-card::before{content:"";position:absolute;inset:0;border-radius:22px;padding:1px;pointer-events:none;
+      background:linear-gradient(140deg, rgba(56,189,248,.55), rgba(139,92,246,.35) 40%, transparent 70%);
+      -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+    .lf-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;letter-spacing:1.6px;
+      color:var(--accent);background:rgba(56,189,248,.10);border:1px solid rgba(56,189,248,.22);
+      padding:6px 12px;border-radius:999px}
+    .lf-live{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 0 0 rgba(52,211,153,.7);animation:lf-blip 1.8s infinite}
+    .lf-h1{font-size:clamp(32px,5.4vw,52px);line-height:1.04;margin:16px 0 14px;letter-spacing:-1px;font-weight:800}
+    .lf-grad{background:linear-gradient(100deg,#7dd3fc,#38bdf8 40%,#818cf8);-webkit-background-clip:text;background-clip:text;
+      -webkit-text-fill-color:transparent;background-size:200% auto;animation:lf-shine 6s linear infinite}
+    .lf-sub{font-size:16.5px;line-height:1.6;margin:0;max-width:440px}
+    .lf-cta{margin-top:26px;display:flex;gap:12px;justify-content:flex-start;flex-wrap:wrap}
+    .lf-primary{font-size:16px;padding:14px 26px;box-shadow:0 10px 30px rgba(56,189,248,.35)}
+    .lf-primary:hover{transform:translateY(-1px)}
+    .lf-ghost2{font-size:16px;padding:14px 22px;background:rgba(255,255,255,.05)}
+    .lf-chips{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin-top:18px}
+    .lf-chip{font-size:12px;color:var(--ink-dim);background:rgba(255,255,255,.05);border:1px solid var(--glass-brd);
+      padding:5px 11px;border-radius:999px}
+    .lf-feats{display:grid;grid-template-columns:1fr;gap:13px;margin-top:24px;padding-top:22px;border-top:1px solid var(--glass-brd);text-align:left}
+    .lf-feat{display:flex;gap:11px;align-items:flex-start}
+    .lf-feat-ic{font-size:20px;line-height:1;flex:none;margin-top:1px}
+    .lf-feat-t{font-weight:700;font-size:14.5px;margin-bottom:3px}
+    .lf-feat-b{font-size:12.5px;line-height:1.5}
+    .lf-foot{pointer-events:auto;text-align:center;margin:6px 0 0}
+    .lf-radar{position:relative;width:26px;height:26px}
+    .lf-radar .lf-core{position:absolute;inset:9px;border-radius:50%;background:#f2585b;box-shadow:0 0 14px 3px rgba(242,88,91,.8)}
+    .lf-radar .lf-ring{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(242,88,91,.7);animation:lf-radar 2.4s ease-out infinite}
+    .lf-radar .lf-ring2{animation-delay:1.2s}
+    @keyframes lf-radar{0%{transform:scale(.3);opacity:.9}100%{transform:scale(1.6);opacity:0}}
+    @keyframes lf-blip{0%{box-shadow:0 0 0 0 rgba(52,211,153,.6)}70%{box-shadow:0 0 0 7px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}
+    @keyframes lf-shine{to{background-position:200% center}}
+    @keyframes lf-rise{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
+    @media(prefers-reduced-motion:reduce){.lf-card,.lf-grad,.lf-live,.lf-radar .lf-ring{animation:none}}
+  </style>`));
+}
+
 let devices = [];
 let selectedId = null;
+let drawerOpen = false; // device controls collapsed until the row is clicked
+
+// Build the collapsible controls drawer for one Deck. The drawer element is
+// passed to the flows as their container, so #pout stays scoped to it.
+function buildDeviceDrawer(d) {
+  const drawer = h('<div class="drawer col"></div>');
+
+  const seg = h('<div><label>Mode</label><div class="seg"></div></div>');
+  for (const m of ['normal', 'lost']) {
+    const b = h(`<button class="${m === d.mode ? 'on ' + m : ''}">${m === 'normal' ? 'Normal' : 'Lost'}</button>`);
+    b.onclick = () => setMode(d, m, drawer);
+    seg.querySelector('.seg').append(b);
+  }
+  drawer.append(seg);
+  drawer.append(h('<input id="lostmsg" placeholder="Message shown to finder (lost mode)">'));
+
+  const ring = h('<button class="primary" style="width:100%">🔊 Play sound on Deck</button>');
+  ring.onclick = async () => {
+    const out = drawer.querySelector('#pout');
+    const flash = (html) => { out.innerHTML = html; setTimeout(() => { if (out.innerHTML === html) out.innerHTML = ''; }, 4000); };
+    try { await api('PUT', `/v1/ring/${d.device_id}`); flash('<div class="glass" style="padding:10px">🔊 Ringing the Deck…</div>'); }
+    catch (e) { flash(`<div style="color:var(--stolen)">${esc(e.message)}</div>`); }
+  };
+  drawer.append(ring);
+
+  const actions = h('<div class="row"></div>');
+  const locate = h('<button class="primary" style="flex:1">📍 Locate</button>');
+  locate.onclick = () => locateFlow(d, drawer);
+  const msgs = h(`<button style="flex:1">✉ Messages${hasUnread(d) ? ' <span class="badge">new</span>' : ''}</button>`);
+  msgs.onclick = () => {
+    markSeen(d);
+    app.querySelectorAll('.badge').forEach((b) => b.remove());
+    relayFlow(d, drawer);
+  };
+  actions.append(locate, msgs);
+  drawer.append(actions);
+
+  const revoke = h('<button class="ghost danger" style="width:100%">Revoke this Deck</button>');
+  revoke.onclick = async () => {
+    if (!confirm(`Revoke "${d.name}"? Deletes its token and all reports.`)) return;
+    await api('DELETE', `/v1/devices/${d.device_id}`);
+    drawerOpen = false;
+    await loadDevices(false);
+  };
+  drawer.append(revoke);
+  drawer.append(h('<div id="pout" class="col"></div>'));
+  return drawer;
+}
 
 async function loadDevices(keepSelection = true) {
   devices = await api('GET', '/v1/devices');
@@ -266,65 +406,30 @@ function renderShell() {
     </div>`);
   const body = panel.querySelector('#pbody');
 
-  // device switcher (collapses to nothing when only one, but still shown for clarity)
+  // Device list — each row is a header; clicking it opens a drawer with that
+  // Deck's controls (collapsed by default, so the panel stays compact).
   if (!devices.length) body.append(h('<div class="empty">No Decks enrolled yet.</div>'));
   for (const dev of devices) {
+    const isSel = dev.device_id === selectedId;
+    const open = isSel && drawerOpen;
     const btn = h(`
-      <button class="devbtn ${dev.device_id === selectedId ? 'active' : ''}">
+      <button class="devbtn ${isSel ? 'active' : ''} ${open ? 'open' : ''}">
         <span class="dot ${esc(dev.mode)}"></span>
         <span style="flex:1">
           <div style="font-weight:600">${esc(dev.name)}${hasUnread(dev) ? ' <span class="badge">new</span>' : ''}</div>
           <div class="faint">${dev.last_seen ? 'seen ' + timeAgo(dev.last_seen) : 'never seen'}</div>
         </span>
         <span class="pill ${esc(dev.mode)}">${esc(dev.mode)}</span>
+        <span class="chev">▸</span>
       </button>`);
-    btn.onclick = () => { selectedId = dev.device_id; renderShell(); autoLocate(); };
+    btn.onclick = () => {
+      if (dev.device_id === selectedId) { drawerOpen = !drawerOpen; }
+      else { selectedId = dev.device_id; drawerOpen = true; }
+      renderShell();
+      if (drawerOpen) autoLocate();
+    };
     body.append(btn);
-  }
-
-  // controls for the selected device, inline in the same panel
-  if (d) {
-    body.append(h('<div style="height:1px;background:var(--glass-brd);margin:4px 0"></div>'));
-    const seg = h('<div><label>Mode</label><div class="seg"></div></div>');
-    for (const m of ['normal', 'lost']) {
-      const label = m === 'normal' ? 'Normal' : 'Lost';
-      const b = h(`<button class="${m === d.mode ? 'on ' + m : ''}">${label}</button>`);
-      b.onclick = () => setMode(d, m, body);
-      seg.querySelector('.seg').append(b);
-    }
-    body.append(seg);
-    body.append(h('<input id="lostmsg" placeholder="Message shown to finder (lost mode)">'));
-
-    const ring = h('<button class="primary" style="width:100%">🔊 Play sound on Deck</button>');
-    ring.onclick = async () => {
-      const out = body.querySelector('#pout');
-      // Fire-and-forget: flash a transient confirmation, never persist it.
-      const flash = (html) => { out.innerHTML = html; setTimeout(() => { if (out.innerHTML === html) out.innerHTML = ''; }, 4000); };
-      try { await api('PUT', `/v1/ring/${d.device_id}`); flash('<div class="glass" style="padding:10px">🔊 Ringing the Deck…</div>'); }
-      catch (e) { flash(`<div style="color:var(--stolen)">${esc(e.message)}</div>`); }
-    };
-    body.append(ring);
-
-    const actions = h('<div class="row"></div>');
-    const locate = h('<button class="primary" style="flex:1">📍 Locate</button>');
-    locate.onclick = () => locateFlow(d, body);
-    const msgs = h(`<button style="flex:1">✉ Messages${hasUnread(d) ? ' <span class="badge">new</span>' : ''}</button>`);
-    msgs.onclick = () => {
-      markSeen(d);
-      app.querySelectorAll('.badge').forEach((b) => b.remove()); // clear in place
-      relayFlow(d, body);
-    };
-    actions.append(locate, msgs);
-    body.append(actions);
-
-    const revoke = h('<button class="ghost danger" style="width:100%">Revoke this Deck</button>');
-    revoke.onclick = async () => {
-      if (!confirm(`Revoke "${d.name}"? Deletes its token and all reports.`)) return;
-      await api('DELETE', `/v1/devices/${d.device_id}`);
-      await loadDevices(false);
-    };
-    body.append(revoke);
-    body.append(h('<div id="pout" class="col"></div>'));
+    if (open) body.append(buildDeviceDrawer(dev));
   }
 
   panel.querySelector('#logout').onclick = async () => { await api('POST', '/auth/logout'); location.reload(); };
@@ -385,7 +490,7 @@ async function locateFlow(d, body) {
   try {
     const ctx = await deriveFor(d.device_id, `Decrypt locations for "${d.name}"`);
     if (!ctx) { out.innerHTML = ''; return; }
-    const rows = await api('GET', `/v1/reports/${d.device_id}?limit=50`);
+    const rows = await api('GET', `/v1/reports/${d.device_id}?limit=100`);
     const reports = [];
     for (const r of rows) {
       try { reports.push({ at: r.received_at, ...JSON.parse(await sealOpen(r.blob, ctx.box_pk, ctx.keys.boxSk)) }); } catch { /* old key gen */ }
@@ -397,8 +502,8 @@ async function locateFlow(d, body) {
 
     const fixes = [];
     let noMatch = 0;
-    for (const r of reports.slice(0, 50)) {
-      try { const f = await resolveWifi(r.wifi || []); if (f) fixes.push({ ...f, ts: r.ts, batt: r.batt }); else noMatch += 1; } catch { noMatch += 1; }
+    for (const r of reports.slice(0, 100)) {
+      try { const f = await resolveWifi(r.wifi || []); if (f) fixes.push({ ...f, ts: r.ts, batt: r.batt, ssid: r.ssid }); else noMatch += 1; } catch { noMatch += 1; }
     }
     plotFixes(fixes, { name: d.name });
 
@@ -419,6 +524,26 @@ async function locateFlow(d, body) {
         <div class="faint" style="margin-bottom:4px">Recurring Bluetooth (travelling with the Deck)</div>
         ${recurring.map(([mac, n]) => `<div class="kv"><span class="k">${esc(mac)}</span><span class="v">×${n}</span></div>`).join('')}
       </div>`));
+    }
+
+    // History — every located fix over the retained window (7 days), newest
+    // first. Click a row to fly the map to that point.
+    if (fixes.length) {
+      const hist = h(`<div class="glass" style="padding:10px">
+        <div class="faint" style="margin-bottom:6px">History · ${fixes.length} location${fixes.length > 1 ? 's' : ''} (last 7 days)</div>
+        <div class="histlist"></div></div>`);
+      const list = hist.querySelector('.histlist');
+      fixes.forEach((f, i) => {
+        const row = h(`<button class="histrow${i === 0 ? ' latest' : ''}" title="${esc(new Date(f.ts).toLocaleString())}">
+          <span class="hr-dot"></span>
+          <span class="hr-main">
+            <span class="hr-when">${i === 0 ? 'Latest · ' : ''}${timeAgo(f.ts)}</span>
+            <span class="hr-sub">${f.ssid ? '📶 ' + esc(f.ssid) + ' · ' : ''}±${Math.round(f.accuracy)} m${f.batt >= 0 ? ' · 🔋 ' + Math.round(f.batt * 100) + '%' : ''}</span>
+          </span></button>`);
+        row.onclick = () => focusFix(i);
+        list.append(row);
+      });
+      out.append(hist);
     }
   } catch (e) { out.innerHTML = `<div style="color:var(--stolen)">${esc(e.message)}</div>`; }
 }

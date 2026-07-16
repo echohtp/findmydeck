@@ -113,6 +113,23 @@ def bt_scan(window_s: int = 10) -> list[dict]:
     return parse_bluetoothctl(_run(["bluetoothctl", "devices"]))
 
 
+def connected_ssid(interface: str = "wlan0") -> str:
+    """Name of the currently-joined Wi-Fi network. Sealed into the report so
+    the owner sees 'connected to X' on decrypt — the server never sees it.
+    SteamOS ships iwd; fall back to iwgetid / nmcli elsewhere."""
+    out = _run(["iwctl", "station", interface, "show"])
+    m = re.search(r"Connected network\s+(.+?)\s*$", out, re.M)
+    if m:
+        return m.group(1).strip()
+    out = _run(["iwgetid", "-r"]).strip()
+    if out:
+        return out
+    for line in _run(["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"]).splitlines():
+        if line.startswith("yes:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
 def battery_level() -> float:
     for supply in ("BAT0", "BAT1", "battery"):
         try:

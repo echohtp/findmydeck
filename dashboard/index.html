@@ -77,6 +77,11 @@
       background: transparent; border: 1px solid transparent; }
     .devbtn:hover { background: rgba(255,255,255,.06); }
     .devbtn.active { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.35); }
+    .devbtn .chev { font-size: 12px; opacity: .55; transition: transform .18s ease; }
+    .devbtn.open .chev { transform: rotate(90deg); }
+    .drawer { display: flex; flex-direction: column; gap: 8px; padding: 10px 4px 4px;
+      margin: 2px 0 4px; border-top: 1px solid var(--glass-brd); animation: drawer .18s ease; }
+    @keyframes drawer { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
     .dot.normal { background: var(--normal); } .dot.lost { background: var(--lost); } .dot.stolen { background: var(--stolen); }
 
@@ -104,6 +109,17 @@
     @keyframes sp { to { transform: rotate(360deg); } }
     a { color: var(--accent); }
     .empty { text-align: center; color: var(--ink-dim); padding: 24px 8px; }
+
+    /* location history */
+    .histlist { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 0 -2px; }
+    .histrow { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left;
+      background: transparent; border: 0; border-radius: 8px; padding: 7px 8px; cursor: pointer; color: var(--ink); }
+    .histrow:hover { background: rgba(255,255,255,.06); }
+    .histrow .hr-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+    .histrow.latest .hr-dot { background: #f2585b; box-shadow: 0 0 8px rgba(242,88,91,.7); }
+    .hr-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .hr-when { font-size: 13px; font-weight: 600; }
+    .hr-sub { font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* map markers */
     .pin { border-radius: 50%; border: 2px solid #0a0f18; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }

@@ -2,9 +2,9 @@
 
 # 🛰️ Find My Steam Deck
 
-### Find your Steam Deck. Even if someone took it.
+### Find your Steam Deck. Nobody else can.
 
-A **zero-knowledge** anti-theft & recovery system for the Steam Deck — a [Decky Loader](https://decky.xyz) plugin, an identity-plane server, and a full-screen owner dashboard.
+A **zero-knowledge** find-my-device & recovery system for the Steam Deck — a [Decky Loader](https://decky.xyz) plugin, an identity-plane server, and a full-screen owner dashboard.
 The server stores only ciphertext it can never read. Location and control belong to you and your password alone.
 
 [![zero-knowledge](https://img.shields.io/badge/design-zero--knowledge-38bdf8)](#how-the-two-planes-fit)
@@ -66,7 +66,9 @@ Event-driven checks (wake, game exit, QAM open, network connect) plus a lazy hou
 
 <div align="center">
 
-**Owner dashboard — full-screen dark map, live pin, glass controls**
+**Owner dashboard — decrypted report history plotted on a full-screen dark map**
+
+Each point is a report the Deck sent (per wake / scan / upload), decrypted in your browser and geolocated — snapshots, not continuous GPS. A stationary Deck stacks on one dot; the trail appears when it actually moved.
 
 ![Dashboard](docs/media/demo-dashboard.png)
 
@@ -74,11 +76,9 @@ Event-driven checks (wake, game exit, QAM open, network connect) plus a lazy hou
 
 ![Lost screen](docs/media/demo-lost.png)
 
-**Operator admin — sealed-safe operational stats only**
-
-![Admin](docs/media/demo-admin.png)
-
 </div>
+
+There's also a SteamID-gated operator page at `/admin` — sealed-safe operational counts only (installs, active devices, reports stored), never location or personal data.
 
 ## How the two planes fit
 
@@ -116,7 +116,7 @@ The same crypto core runs three ways and is proven wire-compatible by tests: Typ
 2. On the Deck: Decky → **Find My Deck** → enter the pair code and choose a recovery password.
 3. The QAM frontend derives the keypairs **on-device**, sends **public keys only**, wipes the password and secret keys, and stores `device_id` + `device_token`.
 
-Physical possession of the Deck **and** an authenticated dashboard session are both required. This is anti-theft, not stalkerware.
+Enrolling a Deck needs both physical possession of it **and** your authenticated dashboard session — you can only set up a Deck you actually hold and control.
 
 ## Modes
 

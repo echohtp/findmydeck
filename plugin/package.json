@@ -1,7 +1,7 @@
 {
   "name": "findmydeck-plugin",
   "version": "0.8.1",
-  "description": "Find My Steam Deck — zero-knowledge anti-theft (Decky plugin frontend)",
+  "description": "Find My Steam Deck — zero-knowledge find-my-device (Decky plugin frontend)",
   "type": "module",
   "scripts": {
     "build": "rollup -c",

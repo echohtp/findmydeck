@@ -4,8 +4,8 @@
   "flags": ["_root"],
   "api_version": 1,
   "publish": {
-    "tags": ["security", "anti-theft"],
-    "description": "Zero-knowledge anti-theft & recovery. Sealed location reports only you can decrypt; signed commands only you can issue.",
+    "tags": ["security", "find-my-device"],
+    "description": "Zero-knowledge find-my-device & recovery. Sealed location reports only you can decrypt; signed commands only you can issue.",
     "image": ""
   }
 }
