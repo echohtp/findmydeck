@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Find My Deck — Admin</title>
+  <style>
+    :root {
+      --accent: #38bdf8; --lost: #f0b429; --normal: #34d399;
+      --ink: #eef2f7; --ink-dim: rgba(238,242,247,.62); --ink-faint: rgba(238,242,247,.40);
+      --glass: rgba(17,24,38,.72); --brd: rgba(255,255,255,.10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: radial-gradient(1100px 600px at 50% -10%, #14263a, #0a0f18 60%);
+      padding: 32px 20px;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 24px; display: flex; align-items: center; gap: 10px; }
+    .sub { color: var(--ink-dim); margin-top: -6px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 20px 0; }
+    .tile { background: var(--glass); border: 1px solid var(--brd); border-radius: 16px; padding: 18px; }
+    .tile .n { font-size: 32px; font-weight: 800; letter-spacing: -.5px; }
+    .tile .l { color: var(--ink-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; margin-top: 4px; }
+    .tile.accent .n { color: var(--accent); } .tile.lost .n { color: var(--lost); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--brd); }
+    th { color: var(--ink-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+    .card { background: var(--glass); border: 1px solid var(--brd); border-radius: 16px; padding: 18px; margin-top: 18px; }
+    .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.08); }
+    .pill.lost { color: var(--lost); background: rgba(240,180,41,.16); }
+    .pill.normal { color: var(--normal); background: rgba(52,211,153,.14); }
+    .deny { max-width: 460px; margin: 12vh auto; text-align: center; }
+    a { color: var(--accent); }
+    .foot { color: var(--ink-faint); font-size: 12px; margin-top: 18px; }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app">Loading…</div>
+  <script>
+    const app = document.getElementById('app');
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    const ago = (ts) => { if (!ts) return '—'; const s = Math.floor((Date.now() - ts) / 1000);
+      return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : s < 86400 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 86400) + 'd'; };
+
+    async function load() {
+      let res;
+      try { res = await fetch('/v1/admin/stats'); } catch { app.innerHTML = '<div class="deny">Server unreachable.</div>'; return; }
+      if (res.status === 401) {
+        app.innerHTML = '<div class="deny"><h1>🔒 Admin</h1><p>Sign in with Steam first.</p><a href="/auth/steam">Sign in through Steam</a></div>';
+        return;
+      }
+      if (res.status === 403) {
+        app.innerHTML = '<div class="deny"><h1>⛔ Not authorized</h1><p>This admin panel is restricted to the operator account.</p><a href="/">Back to Find My Deck</a></div>';
+        return;
+      }
+      const s = await res.json();
+      const tile = (n, l, cls = '') => `<div class="tile ${cls}"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+      app.innerHTML = `
+        <h1>🛰 Find My Deck — Admin</h1>
+        <p class="sub">Operational stats. No location data or personal info here — reports are sealed and identities are HMAC-hashed.</p>
+        <div class="grid">
+          ${tile(s.installs, 'Installs (devices)', 'accent')}
+          ${tile(s.accounts, 'Accounts')}
+          ${tile(s.active_24h, 'Active (24h)')}
+          ${tile(s.lost, 'In lost mode', 'lost')}
+          ${tile(s.enrolled_7d, 'New this week')}
+          ${tile(s.reports, 'Reports stored')}
+          ${tile(s.reports_24h, 'Reports (24h)')}
+          ${tile(s.relay_messages, 'Relay messages')}
+          ${tile(s.pair_codes_pending, 'Pair codes pending')}
+        </div>
+        <div class="card">
+          <h3 style="margin-top:0">Recent enrollments</h3>
+          <table><thead><tr><th>Enrolled</th><th>Mode</th><th>Last seen</th></tr></thead><tbody>
+          ${s.recent.map((d) => `<tr>
+            <td>${ago(d.created_at)} ago</td>
+            <td><span class="pill ${esc(d.mode)}">${esc(d.mode)}</span></td>
+            <td>${d.last_seen ? ago(d.last_seen) + ' ago' : 'never'}</td></tr>`).join('') || '<tr><td colspan="3">none</td></tr>'}
+          </tbody></table>
+        </div>
+        <div class="foot">Generated ${new Date(s.generated_at).toLocaleString()} · <a href="/">dashboard</a></div>`;
+    }
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>

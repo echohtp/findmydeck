@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Return a lost Steam Deck</title>
+  <style>
+    :root {
+      --accent: #38bdf8; --accent-ink: #0a1420; --ink: #eef2f7;
+      --ink-dim: rgba(238,242,247,.62); --ink-faint: rgba(238,242,247,.40);
+      --glass: rgba(17,24,38,.72); --glass-brd: rgba(255,255,255,.10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: radial-gradient(1200px 700px at 50% -10%, #14263a 0%, #0a0f18 55%, #070b12 100%);
+      display: flex; align-items: flex-start; justify-content: center; padding: 24px;
+    }
+    .wrap { width: 100%; max-width: 560px; }
+    .hero { text-align: center; margin: 12px 0 20px; }
+    .hero .logo { font-size: 48px; }
+    .hero h1 { font-size: 24px; margin: 8px 0 4px; }
+    .hero p { color: var(--ink-dim); margin: 0; }
+    .glass {
+      background: var(--glass); backdrop-filter: blur(18px) saturate(1.3);
+      -webkit-backdrop-filter: blur(18px) saturate(1.3);
+      border: 1px solid var(--glass-brd); border-radius: 16px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.45); padding: 20px; margin: 14px 0;
+    }
+    .owner-msg { font-size: 18px; line-height: 1.5; }
+    .label { font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+    .faint { color: var(--ink-faint); font-size: 13px; }
+    .muted { color: var(--ink-dim); }
+    textarea {
+      font: inherit; color: var(--ink); background: rgba(0,0,0,.28);
+      border: 1px solid var(--glass-brd); border-radius: 12px; padding: 12px; width: 100%; resize: vertical;
+    }
+    textarea:focus { outline: none; border-color: var(--accent); }
+    button {
+      font: inherit; font-weight: 700; color: var(--accent-ink); background: var(--accent);
+      border: none; border-radius: 12px; padding: 12px 18px; cursor: pointer; transition: filter .15s;
+    }
+    button:hover { filter: brightness(1.08); } button:active { transform: translateY(1px); }
+    .thread { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+    .msg { padding: 10px 13px; border-radius: 12px; max-width: 85%; font-size: 14px; }
+    .msg.owner { background: rgba(56,189,248,.16); align-self: flex-start; }
+    .msg.finder { background: rgba(255,255,255,.07); align-self: flex-end; }
+    .msg .who { font-size: 11px; color: var(--ink-faint); margin-top: 4px; }
+    .steps { display: flex; gap: 12px; justify-content: center; color: var(--ink-dim); font-size: 13px; margin-top: 10px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="logo">🛰</div>
+      <h1>You found someone's Steam Deck</h1>
+      <p>Let's get it back to its owner.</p>
+    </div>
+    <div id="app"><div class="glass">Loading…</div></div>
+  </div>
+  <script>
+    const code = decodeURIComponent(location.pathname.split('/').filter(Boolean).pop() || '').toUpperCase();
+    const app = document.getElementById('app');
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+    async function load() {
+      let info;
+      try {
+        const res = await fetch('/v1/found/' + encodeURIComponent(code));
+        if (!res.ok) throw new Error('notfound');
+        info = await res.json();
+      } catch {
+        app.innerHTML = `<div class="glass">
+          <div class="label">Code not recognized</div>
+          No Deck is registered to <strong>${esc(code)}</strong>. Re-check the characters shown on the device —
+          the codes never contain <strong>O, 0, I, 1,</strong> or <strong>L</strong>, so those are easy to mix up.
+        </div>`;
+        return;
+      }
+      const thread = info.messages.length
+        ? `<div class="thread">${info.messages.map((m) =>
+            `<div class="msg ${m.sender}">${esc(m.body)}<div class="who">${m.sender === 'owner' ? 'Owner' : 'You'}</div></div>`).join('')}</div>`
+        : '';
+      app.innerHTML = `
+        <div class="glass">
+          <div class="label">Message from the owner</div>
+          <div class="owner-msg">${esc(info.ownerMessage || 'Thank you so much for helping return my Deck!')}</div>
+        </div>
+        <div class="glass">
+          <div class="label">Send them a message</div>
+          <p class="faint" style="margin-top:0">They can reply right here. Neither of you sees the other's personal contact details.</p>
+          ${thread}
+          <textarea id="body" rows="3" placeholder="e.g. Found it at the coffee shop on 5th — reach me at 555-0148"></textarea>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+            <button id="send">Send to owner</button><span id="stat" class="faint"></span>
+          </div>
+        </div>
+        <div class="steps"><span>🔒 Private relay</span><span>·</span><span>No accounts</span><span>·</span><span>No details shared</span></div>`;
+      document.getElementById('send').onclick = async () => {
+        const body = document.getElementById('body').value.trim();
+        if (!body) return;
+        document.getElementById('stat').textContent = 'Sending…';
+        const r = await fetch('/v1/found/' + encodeURIComponent(code), {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ body }),
+        });
+        document.getElementById('stat').textContent = r.ok ? 'Sent — thank you!' : 'Failed, try again.';
+        if (r.ok) load();
+      };
+    }
+    load();
+    setInterval(load, 20000);
+  </script>
+</body>
+</html>

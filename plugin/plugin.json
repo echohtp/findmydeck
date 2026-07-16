@@ -1,0 +1,11 @@
+{
+  "name": "Find My Steam Deck",
+  "author": "web3studio",
+  "flags": ["_root"],
+  "api_version": 1,
+  "publish": {
+    "tags": ["security", "anti-theft"],
+    "description": "Zero-knowledge anti-theft & recovery. Sealed location reports only you can decrypt; signed commands only you can issue.",
+    "image": ""
+  }
+}

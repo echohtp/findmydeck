@@ -1,0 +1,10 @@
+node_modules/
+data/
+dist/
+out/
+__pycache__/
+*.sqlite3
+public/
+.impeccable/
+.venv/
+*.log

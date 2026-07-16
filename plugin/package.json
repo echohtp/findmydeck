@@ -1,0 +1,22 @@
+{
+  "name": "findmydeck-plugin",
+  "version": "0.8.1",
+  "description": "Find My Steam Deck — zero-knowledge anti-theft (Decky plugin frontend)",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -c -w"
+  },
+  "devDependencies": {
+    "@decky/api": "^1.1.2",
+    "@decky/rollup": "^1.0.1",
+    "@decky/ui": "^4.9.1",
+    "@types/react": "18.3.3",
+    "rollup": "^4.22.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "libsodium-wrappers-sumo": "^0.7.15"
+  },
+  "pnpm": {}
+}

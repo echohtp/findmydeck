@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Find My Deck — Lost</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font: 16px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+      /* Steam Deck native resolution */
+      width: 1280px; height: 800px; overflow: hidden;
+    }
+    /* Full-screen lost surface — mirrors LostScreen in plugin/src/index.tsx */
+    .lost {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      padding: 3vw; gap: 1.2rem;
+      background: linear-gradient(160deg, #12263a, #0a1622);
+    }
+    .glyph { font-size: 4rem; line-height: 1; }
+    .title { font-size: 2rem; font-weight: 700; }
+    .lost-accent { color: #f0b429; }
+    .owner-msg { font-size: 1.4rem; max-width: 70ch; opacity: 0.95; }
+
+    .cta {
+      font-size: 1.5rem; font-weight: 800; color: #0a1420; cursor: pointer;
+      background: #38bdf8; border: none; border-radius: 16px;
+      padding: 1.1rem 2.4rem; box-shadow: 0 10px 30px rgba(56,189,248,.4);
+    }
+
+    .code-chip {
+      display: inline-flex; align-items: center; gap: 10px;
+      font: 700 1.4rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .18em; color: #f0b429;
+      background: rgba(240,180,41,.14); border: 1px solid rgba(240,180,41,.4);
+      padding: 10px 18px; border-radius: 999px;
+    }
+    .code-chip .lbl { font: 600 .8rem/1 -apple-system, system-ui, sans-serif;
+      letter-spacing: .04em; color: rgba(255,255,255,.7); text-transform: uppercase; }
+
+    /* LostChat */
+    .chat {
+      width: min(560px, 92vw); background: #ffffff10; border: 1px solid #ffffff22;
+      border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px;
+      text-align: left;
+    }
+    .chat-hd { font-size: 1rem; font-weight: 600; }
+    .chat-sub { font-size: .85rem; opacity: 0.7; }
+    .chat-log { max-height: 30vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+    .bubble { padding: 7px 11px; border-radius: 10px; max-width: 85%; font-size: 1rem; }
+    .bubble.finder { align-self: flex-end; background: #38bdf833; }
+    .bubble.owner { align-self: flex-start; background: #ffffff16; }
+    .bubble .who { font-size: .75rem; opacity: 0.6; margin-top: 2px; }
+    .chat input {
+      font: inherit; color: #fff; background: rgba(0,0,0,.28);
+      border: 1px solid #ffffff22; border-radius: 8px; padding: 10px 12px; width: 100%;
+    }
+    .chat input::placeholder { color: rgba(255,255,255,.5); }
+    .chat-send {
+      font: inherit; font-weight: 600; color: #fff; cursor: pointer;
+      background: rgba(255,255,255,.10); border: 1px solid #ffffff22;
+      border-radius: 8px; padding: 10px 14px;
+    }
+
+    .hint { font-size: 1.05rem; opacity: 0.8; max-width: 60ch; }
+
+    .controls { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+    .dlgbtn {
+      font: inherit; font-size: 1rem; font-weight: 600; color: #fff; cursor: pointer;
+      max-width: 260px; background: rgba(255,255,255,.10); border: 1px solid #ffffff22;
+      border-radius: 8px; padding: 12px 22px;
+    }
+  </style>
+</head>
+<body>
+  <div class="lost">
+    <div class="glyph">🛰</div>
+    <div class="title">This Steam Deck is <span class="lost-accent">lost</span></div>
+    <div class="owner-msg">This Deck is lost. Reward for its return — please tap Message owner. — banana</div>
+
+    <div class="code-chip"><span class="lbl">Recovery code</span> EOLB-3W7K</div>
+
+    <div class="chat">
+      <div class="chat-hd">Message the owner</div>
+      <div class="chat-sub">Private — no contact details are shared either way.</div>
+      <div class="chat-log">
+        <div class="bubble owner">Hi, thanks for finding it!<div class="who">owner</div></div>
+        <div class="bubble finder">Found it at the coffee shop on 2nd<div class="who">you</div></div>
+      </div>
+      <input placeholder="Type a message to the owner…">
+      <button class="chat-send">Send to owner</button>
+    </div>
+
+    <div class="hint">Also helpful: connect this Deck to any Wi-Fi network so its owner can locate it.</div>
+
+    <div class="controls">
+      <button class="dlgbtn">🔇 Silence</button>
+      <button class="dlgbtn">Dismiss</button>
+    </div>
+  </div>
+</body>
+</html>

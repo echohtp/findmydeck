@@ -1,0 +1,29 @@
+{
+  "name": "findmydeck",
+  "version": "0.2.0",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs && ${FMSD_PYTHON:-python3} tests/test_plugin.py",
+    "start": "node server/index.js",
+    "build:dashboard": "esbuild dashboard/src/main.js --bundle --format=esm --outfile=dashboard/dist/app.js --minify --loader:.png=dataurl && cp dashboard/index.html dashboard/dist/index.html && cp dashboard/found.html dashboard/dist/found.html && cp dashboard/admin.html dashboard/dist/admin.html",
+    "build:plugin": "bash plugin/build.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "type": "module",
+  "dependencies": {
+    "express": "^5.2.1",
+    "leaflet": "^1.9.4",
+    "libsodium-wrappers-sumo": "^0.8.4",
+    "openid": "^2.0.17",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
