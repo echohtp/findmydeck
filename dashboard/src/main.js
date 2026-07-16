@@ -297,7 +297,7 @@ function renderLogin() {
         </div>
 
         <p class="faint lf-foot">
-          Zero-knowledge by design · Steam login only reveals your public ID · Your password is unrecoverable on purpose
+          Zero-knowledge by design · Steam login only reveals your public ID · <a href="/privacy">Privacy</a> · <a href="https://github.com/echohtp/findmydeck" target="_blank" rel="noopener">GitHub</a>
         </p>
       </div>
     </div>`));
@@ -370,8 +370,18 @@ let drawerOpen = false; // device controls collapsed until the row is clicked
 
 // Build the collapsible controls drawer for one Deck. The drawer element is
 // passed to the flows as their container, so #pout stays scoped to it.
+// Plain-language reporting health from last_seen (no decryption needed).
+function deviceHealth(d) {
+  if (!d.last_seen) return { cls: 'idle', text: 'No reports yet — open Find My Deck on the Deck to send one.' };
+  const age = Date.now() - d.last_seen;
+  if (age < 2 * 3600 * 1000) return { cls: 'ok', text: `✓ Reporting normally · last check-in ${timeAgo(d.last_seen)}` };
+  return { cls: 'warn', text: `⚠ Quiet · last check-in ${timeAgo(d.last_seen)} (Deck may be asleep or off)` };
+}
+
 function buildDeviceDrawer(d) {
   const drawer = h('<div class="drawer col"></div>');
+  const hp = deviceHealth(d);
+  drawer.append(h(`<div class="health ${hp.cls}">${hp.text}</div>`));
 
   const seg = h('<div><label>Mode</label><div class="seg"></div></div>');
   for (const m of ['normal', 'lost']) {
@@ -447,6 +457,11 @@ function renderShell() {
       <div style="padding:12px 16px;border-top:1px solid var(--glass-brd)">
         <button class="primary" id="enroll" style="width:100%">+ Enroll a new Deck</button>
         <div id="paircode"></div>
+        <div class="row faint" style="justify-content:center;gap:14px;margin-top:10px;font-size:11px">
+          <a href="/privacy" target="_blank" rel="noopener">Privacy</a>
+          <a href="https://github.com/echohtp/findmydeck" target="_blank" rel="noopener">GitHub</a>
+          <a href="#" id="delacct" style="color:var(--stolen)">Delete account</a>
+        </div>
       </div>
     </div>`);
   const body = panel.querySelector('#pbody');
@@ -480,7 +495,21 @@ function renderShell() {
   panel.querySelector('#logout').onclick = async () => { await api('POST', '/auth/logout'); location.reload(); };
   panel.querySelector('#alerts').onclick = () => alertsModal();
   panel.querySelector('#enroll').onclick = () => enrollFlow(panel.querySelector('#paircode'));
+  panel.querySelector('#delacct').onclick = (e) => { e.preventDefault(); deleteAccountFlow(); };
   app.replaceChildren(panel);
+}
+
+// Irreversible: wipe every device, report, relay thread and setting. Double
+// confirm (typed) because there is no undo and no server-side backup.
+async function deleteAccountFlow() {
+  const n = devices.length;
+  if (!confirm(`Delete your account and ALL data?\n\nThis erases ${n} enrolled Deck${n === 1 ? '' : 's'}, every sealed report, all recovery chats, and your alert settings. It cannot be undone.`)) return;
+  const typed = prompt('This is permanent. Type DELETE to confirm.');
+  if (typed !== 'DELETE') return;
+  try {
+    await api('DELETE', '/v1/account');
+    location.reload();
+  } catch (e) { alert(`Could not delete: ${e.message}`); }
 }
 
 // Alerts settings: a webhook sink (Discord/Slack/ntfy/custom) + optional

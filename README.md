@@ -183,6 +183,7 @@ tests/                       interop (TS↔Py), server HTTP, plugin units, full 
 - **No reports while suspended or off.** They arrive in bursts on wake/charge. Design expectation, not a bug.
 - **A SteamOS reimage wipes Decky** and the plugin with it. This shines for the lost-couch / airbnb / left-in-the-car case and the pre-wipe window — not against a wipe-first thief.
 - **Geolocation** resolves in the owner's browser (Wi-Fi → coordinates); single-AP environments may not resolve.
+- **Your data is yours to erase.** The dashboard shows a plain reporting-health line (`✓ Reporting normally` / `⚠ Quiet`), links a [privacy statement](https://findmydeck.0xbanana.com/privacy), and **Delete account** wipes every device, report, relay thread, and setting in one irreversible step.
 
 ## Property checklist — all verified by tests
 

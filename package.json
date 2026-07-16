@@ -8,7 +8,7 @@
   "scripts": {
     "test": "node --test --test-concurrency=1 tests/*.test.mjs && ${FMSD_PYTHON:-python3} tests/test_plugin.py",
     "start": "node server/index.js",
-    "build:dashboard": "esbuild dashboard/src/main.js --bundle --format=esm --outfile=dashboard/dist/app.js --minify --loader:.png=dataurl && cp dashboard/index.html dashboard/dist/index.html && cp dashboard/found.html dashboard/dist/found.html && cp dashboard/admin.html dashboard/dist/admin.html",
+    "build:dashboard": "esbuild dashboard/src/main.js --bundle --format=esm --outfile=dashboard/dist/app.js --minify --loader:.png=dataurl && cp dashboard/index.html dashboard/dist/index.html && cp dashboard/found.html dashboard/dist/found.html && cp dashboard/admin.html dashboard/dist/admin.html && cp dashboard/privacy.html dashboard/dist/privacy.html",
     "build:plugin": "bash plugin/build.sh"
   },
   "keywords": [],

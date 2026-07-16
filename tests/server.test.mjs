@@ -303,3 +303,24 @@ test('notification settings: round-trip + unsafe webhook rejected', async () => 
   // A session is required.
   assert.equal((await client().req('GET', '/v1/notify')).status, 401);
 });
+
+test('account deletion wipes devices + reports and clears session', async () => {
+  const owner = client();
+  await owner.req('GET', `/auth/dev-login?steamid=${OWNER}`);
+  const salt = await genSalt();
+  const keys = await deriveKeys('delete me please 88', salt, TEST_KDF);
+  const enr = await owner.req('POST', '/v1/enroll', {
+    body: { box_pk: keys.boxPk, sign_pk: keys.signPk, salt, kdf: TEST_KDF, device_name: 'doomed' },
+  });
+  const { device_id, device_token } = enr.body;
+  const blob = await seal('{}', keys.boxPk);
+  await owner.req('POST', `/v1/reports/${device_id}`, { body: { blob }, token: device_token });
+  assert.equal((await owner.req('GET', '/v1/devices')).body.length >= 1, true);
+
+  const del = await owner.req('DELETE', '/v1/account');
+  assert.equal(del.status, 200);
+  // Session cleared -> now unauthenticated.
+  assert.equal((await owner.req('GET', '/v1/devices')).status, 401);
+  // Device + its token are gone.
+  assert.equal((await client().req('GET', `/v1/command/${device_id}`, { token: device_token })).status, 401);
+});

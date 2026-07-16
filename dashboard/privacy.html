@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Find My Deck — Privacy</title>
+  <style>
+    :root {
+      --accent: #38bdf8; --ok: #34d399; --warn: #f0b429;
+      --ink: #eef2f7; --ink-dim: rgba(238,242,247,.66); --ink-faint: rgba(238,242,247,.42);
+      --glass: rgba(17,24,38,.72); --brd: rgba(255,255,255,.10);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font: 15.5px/1.65 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: radial-gradient(1100px 620px at 50% -10%, #14263a, #0a0f18 60%);
+      padding: 40px 20px 64px;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 30px; letter-spacing: -.5px; display: flex; align-items: center; gap: 10px; }
+    h2 { font-size: 19px; margin: 30px 0 8px; }
+    p, li { color: var(--ink-dim); }
+    .lead { font-size: 17px; color: var(--ink); }
+    .card { background: var(--glass); border: 1px solid var(--brd); border-radius: 16px; padding: 18px 20px; margin: 16px 0; }
+    .ok { color: var(--ok); } .warn { color: var(--warn); }
+    code { background: rgba(255,255,255,.06); border: 1px solid var(--brd); border-radius: 6px; padding: 1px 6px; font-size: 13px; }
+    a { color: var(--accent); }
+    ul { padding-left: 20px; } li { margin: 5px 0; }
+    .faint { color: var(--ink-faint); font-size: 13px; }
+    .tag { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; }
+    .tag.no { color: var(--ok); background: rgba(52,211,153,.14); }
+    .tag.yes { color: var(--warn); background: rgba(240,180,41,.14); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🛰 Find My Deck — Privacy</h1>
+    <p class="lead">The whole point of this project is that the server can't see where your Deck is. This page says exactly what is and isn't stored, in plain language. Last updated 2026-07-16.</p>
+
+    <h2>The one-line version</h2>
+    <div class="card">
+      Your Deck encrypts every location report on-device with a key derived from <em>your password</em>. That password never leaves your Deck or your browser. The server stores only ciphertext it cannot read, and it decrypts nowhere. Only your browser, with your password, can turn a report back into a location.
+    </div>
+
+    <h2>What the server <span class="tag no">cannot see</span></h2>
+    <ul>
+      <li>Your <strong>password</strong>, your keys, or any seed. Enrollment sends public keys only.</li>
+      <li>Your <strong>location</strong>: reports are sealed (X25519); the server holds opaque blobs.</li>
+      <li>Your <strong>battery level</strong> and Wi-Fi scan details, all inside the sealed report.</li>
+      <li>Your raw <strong>SteamID</strong>: stored only as <code>HMAC(pepper, steamid)</code>.</li>
+    </ul>
+
+    <h2>What the server <span class="tag yes">does store</span></h2>
+    <ul>
+      <li><strong>Sealed report blobs</strong>: opaque ciphertext, kept <strong>7 days</strong> then auto-deleted.</li>
+      <li><strong>Public keys, device names, timestamps</strong> (<code>last_seen</code>, upload times).</li>
+      <li><strong>Source IP</strong>: used only for per-device rate limiting, rotated fast, never sold.</li>
+      <li><strong>Recovery-relay messages</strong> and the <strong>lost-mode message</strong> you set — these are plaintext by design (a finder has no key), so treat them as readable by the server. No contact details are exchanged either way.</li>
+      <li><strong>Connected Wi-Fi name (SSID)</strong>: this rides inside the <em>sealed</em> report, so the server can't read it; only you see it on decrypt.</li>
+      <li><strong>Alert settings</strong>: your webhook URL (and email, if ever enabled), so alerts can be delivered.</li>
+    </ul>
+
+    <h2>Alerts</h2>
+    <p>Alerts fire on <strong>metadata only</strong>: a finder message arrived, a Lost Deck checked in or went quiet. They never contain your location or battery. There is deliberately no "alert when it leaves home" geofence, because that would require the server to read a location it never holds.</p>
+
+    <h2>Third parties</h2>
+    <p>When <em>you</em> press Locate, your browser sends the Deck's decrypted Wi-Fi BSSIDs to a geolocation service (beacondb / Apple's keyless endpoint) to turn them into coordinates. This happens on demand, in your session, and is not stored or logged. If you configure a webhook, alert text is sent to whatever sink you chose (Discord/Slack/ntfy/etc.).</p>
+
+    <h2>Deleting your data</h2>
+    <p>In the dashboard, <strong>Delete account</strong> removes everything immediately: every device, all sealed reports, relay threads, commands, pending pair codes, and your alert settings. It's irreversible. Revoking a single device deletes just that device's token and reports.</p>
+
+    <h2>Honest limits</h2>
+    <ul>
+      <li>The password is <strong>unrecoverable by design</strong>: lose it and old reports stay sealed forever.</li>
+      <li>Source IP is the one location signal that can't be sealed away; it's logged briefly for rate limiting only.</li>
+      <li>This is open source — verify all of the above yourself: <a href="https://github.com/echohtp/findmydeck">github.com/echohtp/findmydeck</a>.</li>
+    </ul>
+
+    <p class="faint" style="margin-top:28px"><a href="/">← Back to Find My Deck</a></p>
+  </div>
+</body>
+</html>

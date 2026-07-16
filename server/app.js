@@ -294,6 +294,20 @@ export function createApp({
     res.json({ ok: true });
   });
 
+  // Delete the whole account: every device, its sealed reports, relay threads,
+  // commands, pending pair codes, alert settings — all of it. Irreversible.
+  app.delete('/v1/account', requireSession, async (req, res) => {
+    const key = req.accountKey;
+    // Devices cascade to reports/commands/relay_threads/relay_messages; pair
+    // codes and the account row reference the account directly, so drop them
+    // in FK order.
+    await q('DELETE FROM pair_codes WHERE account_key = $1', [key]);
+    await q('DELETE FROM devices WHERE account_key = $1', [key]);
+    await q('DELETE FROM accounts WHERE account_key = $1', [key]);
+    res.setHeader('Set-Cookie', 'fmsd_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+    res.json({ ok: true });
+  });
+
   // --- pairing: browser session -> short-lived code typed into the Deck ---
   // Enrollment consent gate (spec §2.4): the code proves a validated Steam
   // login, physical presence at the Deck proves possession.

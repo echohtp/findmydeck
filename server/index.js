@@ -32,6 +32,9 @@ app.get('/found/:code', (_req, res) =>
 // Admin page (access gated by the /v1/admin/stats endpoint, not this route).
 app.get('/admin', (_req, res) =>
   res.sendFile(path.join(here, '../dashboard/dist/admin.html')));
+// Privacy statement (static).
+app.get('/privacy', (_req, res) =>
+  res.sendFile(path.join(here, '../dashboard/dist/privacy.html')));
 app.use(express.static(path.join(here, '../dashboard/dist')));
 
 const server = app.listen(port, host, () =>
