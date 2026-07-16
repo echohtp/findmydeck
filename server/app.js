@@ -106,6 +106,94 @@ export function createApp({
   const ensureAccount = (key) =>
     q('INSERT INTO accounts (account_key, created_at) VALUES ($1, $2) ON CONFLICT DO NOTHING', [key, now()]);
 
+  // --- owner notifications (metadata only — never location or battery) -----
+  // Alerts fire on server-visible metadata: a finder message arrived, a Lost
+  // Deck checked in, a Lost Deck went quiet. Nothing sealed is ever read.
+  const emailEnabled = () => !!process.env.FMSD_RESEND_KEY;
+
+  // Basic SSRF guard: https only, no loopback/link-local/private literals.
+  function safeWebhook(url) {
+    if (!/^https:\/\//i.test(url)) return false;
+    let host;
+    try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+    if (host === 'localhost' || host.endsWith('.local') || host === '::1') return false;
+    if (/^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host)) return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    if (/^(fe80|fc|fd)/.test(host)) return false;
+    return true;
+  }
+
+  async function sendWebhook(url, payload) {
+    if (!safeWebhook(url)) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const line = `${payload.title}\n${payload.text}`;
+      await fetch(url, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'content-type': 'application/json' },
+        // content = Discord, text = Slack, plus structured fields for custom sinks.
+        body: JSON.stringify({ content: line, text: line, ...payload }),
+      });
+    } catch { /* fire-and-forget */ } finally { clearTimeout(t); }
+  }
+
+  async function sendEmail(to, subject, text) {
+    if (!emailEnabled()) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST', signal: ctrl.signal,
+        headers: { authorization: `Bearer ${process.env.FMSD_RESEND_KEY}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          from: process.env.FMSD_MAIL_FROM || 'Find My Deck <noreply@findmydeck.0xbanana.com>',
+          to, subject, text,
+        }),
+      });
+    } catch { /* fire-and-forget */ } finally { clearTimeout(t); }
+  }
+
+  // Deliver to whatever sinks the account configured. Async + swallows errors:
+  // must never delay or fail the request that triggered it.
+  async function notify(key, msg) {
+    try {
+      const a = await one('SELECT notify_webhook, notify_email FROM accounts WHERE account_key = $1', [key]);
+      if (!a) return;
+      const payload = { event: msg.event, title: msg.title, text: msg.text, device: msg.device || '', ts: now() };
+      if (a.notify_webhook) await sendWebhook(a.notify_webhook, payload);
+      if (a.notify_email) await sendEmail(a.notify_email, msg.title, msg.text);
+    } catch { /* never throw into the caller */ }
+  }
+
+  async function notifyDeviceOwner(deviceId, msg) {
+    const d = await one('SELECT name, account_key FROM devices WHERE device_id = $1', [deviceId]);
+    if (d) notify(d.account_key, { ...msg, device: d.name });
+  }
+
+  // Lost-quiet sweep: a Deck you marked Lost that stops checking in for a
+  // while may be off or out of range — alert once. Normal-mode suspend is
+  // never alerted (Decks sleep constantly; that would be pure noise).
+  const LOST_QUIET_MS = 3 * 3600 * 1000;
+  const sweepLostQuiet = async () => {
+    try {
+      const stale = await q(
+        `UPDATE devices SET lost_quiet_notified = true
+           WHERE mode = 'lost' AND lost_quiet_notified = false
+             AND last_seen IS NOT NULL AND last_seen < $1
+         RETURNING name, account_key`, [now() - LOST_QUIET_MS]);
+      for (const d of stale) {
+        notify(d.account_key, {
+          event: 'lost_quiet',
+          title: `⚠️ "${d.name}" has gone quiet`,
+          text: `Your lost Deck "${d.name}" hasn't checked in for over 3 hours — it may be powered off or out of Wi-Fi range.`,
+          device: d.name,
+        });
+      }
+    } catch { /* ignore */ }
+  };
+  setInterval(sweepLostQuiet, 15 * 60 * 1000).unref?.();
+
   function setSession(res, key) {
     const secure = baseUrl.startsWith('https') ? '; Secure' : '';
     res.setHeader('Set-Cookie',
@@ -175,6 +263,37 @@ export function createApp({
 
   app.get('/v1/me', requireSession, (req, res) => res.json({ ok: true }));
 
+  // Owner alert settings (webhook + optional email). Metadata alerts only.
+  app.get('/v1/notify', requireSession, async (req, res) => {
+    const a = await one('SELECT notify_webhook, notify_email FROM accounts WHERE account_key = $1', [req.accountKey]);
+    res.json({ webhook: a?.notify_webhook || '', email: a?.notify_email || '', email_enabled: emailEnabled() });
+  });
+
+  app.put('/v1/notify', requireSession, async (req, res) => {
+    const webhook = String(req.body?.webhook || '').trim().slice(0, 500);
+    const email = String(req.body?.email || '').trim().slice(0, 200);
+    if (webhook && !safeWebhook(webhook)) {
+      return res.status(400).json({ error: 'webhook must be an https URL to a public host' });
+    }
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return res.status(400).json({ error: 'invalid email' });
+    }
+    await ensureAccount(req.accountKey);
+    await q('UPDATE accounts SET notify_webhook = $1, notify_email = $2 WHERE account_key = $3',
+      [webhook || null, email || null, req.accountKey]);
+    res.json({ ok: true });
+  });
+
+  // Send a test alert to the configured sinks so the owner can confirm wiring.
+  app.post('/v1/notify/test', requireSession, async (req, res) => {
+    await notify(req.accountKey, {
+      event: 'test',
+      title: '🛰 Find My Deck — test alert',
+      text: 'Your alerts are wired up. You’ll get pings like this for finder messages and Lost-Deck check-ins.',
+    });
+    res.json({ ok: true });
+  });
+
   // --- pairing: browser session -> short-lived code typed into the Deck ---
   // Enrollment consent gate (spec §2.4): the code proves a validated Steam
   // login, physical presence at the Deck proves possession.
@@ -228,7 +347,21 @@ export function createApp({
     if (!allowReport(req.device.device_id)) return res.status(429).json({ error: 'rate limited' });
     await q('INSERT INTO reports (device_id, blob, received_at) VALUES ($1, $2, $3)',
       [req.device.device_id, blob, now()]);
-    await q('UPDATE devices SET last_seen = $1 WHERE device_id = $2', [now(), req.device.device_id]);
+    // A fresh report means it's alive — clear any "gone quiet" latch.
+    const dev = await one(
+      `UPDATE devices SET last_seen = $1, lost_quiet_notified = false
+         WHERE device_id = $2 RETURNING name, account_key, mode, lost_checkin_notified`,
+      [now(), req.device.device_id]);
+    // Alert once when a Deck you marked Lost first phones home.
+    if (dev && dev.mode === 'lost' && !dev.lost_checkin_notified) {
+      await q('UPDATE devices SET lost_checkin_notified = true WHERE device_id = $1', [req.device.device_id]);
+      notify(dev.account_key, {
+        event: 'lost_checkin',
+        title: `📍 "${dev.name}" just checked in`,
+        text: `Your lost Deck "${dev.name}" reported a fresh location. Open the dashboard to see where it is.`,
+        device: dev.name,
+      });
+    }
     res.status(204).end();
   });
 
@@ -253,6 +386,11 @@ export function createApp({
       'UPDATE devices SET counter = $1, mode = $2 WHERE device_id = $3 AND counter < $1 RETURNING device_id',
       [cmd.counter, cmd.mode, req.device.device_id]);
     if (!bumped) return res.status(409).json({ error: 'counter must advance' });
+    // Fresh Lost session — re-arm the check-in / gone-quiet alerts.
+    if (cmd.mode === 'lost') {
+      await q('UPDATE devices SET lost_checkin_notified = false, lost_quiet_notified = false WHERE device_id = $1',
+        [req.device.device_id]);
+    }
     await q(`INSERT INTO commands (device_id, payload, sig, counter) VALUES ($1, $2, $3, $4)
              ON CONFLICT (device_id) DO UPDATE SET payload = $2, sig = $3, counter = $4`,
       [req.device.device_id, payload, sig, cmd.counter]);
@@ -298,6 +436,11 @@ export function createApp({
     if (!t) return res.status(404).json({ error: 'unknown or expired code' });
     await q('INSERT INTO relay_messages (contact, sender, body, created_at) VALUES ($1, $2, $3, $4)',
       [code, 'finder', body, now()]);
+    notifyDeviceOwner(t.device_id, {
+      event: 'finder_message',
+      title: '✉️ Someone messaged you about your Deck',
+      text: `A finder wrote: “${body.slice(0, 140)}”. Reply from the dashboard.`,
+    });
     res.json({ ok: true });
   });
 
@@ -318,6 +461,11 @@ export function createApp({
              ON CONFLICT (contact) DO NOTHING`, [contact, req.device.device_id, now()]);
     await q('INSERT INTO relay_messages (contact, sender, body, created_at) VALUES ($1, $2, $3, $4)',
       [contact, 'finder', text, now()]);
+    notifyDeviceOwner(req.device.device_id, {
+      event: 'finder_message',
+      title: '✉️ Message from whoever has your Deck',
+      text: `“${text.slice(0, 140)}” — reply from the dashboard.`,
+    });
     res.json({ ok: true });
   });
 

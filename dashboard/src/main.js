@@ -436,7 +436,10 @@ function renderShell() {
     <div class="layer tl glass panel col" style="padding:0">
       <div class="panel-hd">
         <div class="brand"><span class="logo">🛰</span> Find My Deck</div>
-        <button class="ghost" id="logout" title="Sign out">⎋</button>
+        <div class="row" style="gap:6px">
+          <button class="ghost" id="alerts" title="Alerts">🔔</button>
+          <button class="ghost" id="logout" title="Sign out">⎋</button>
+        </div>
       </div>
       <div class="panel-bd col" id="pbody"></div>
       <div style="padding:12px 16px;border-top:1px solid var(--glass-brd)">
@@ -473,8 +476,49 @@ function renderShell() {
   }
 
   panel.querySelector('#logout').onclick = async () => { await api('POST', '/auth/logout'); location.reload(); };
+  panel.querySelector('#alerts').onclick = () => alertsModal();
   panel.querySelector('#enroll').onclick = () => enrollFlow(panel.querySelector('#paircode'));
   app.replaceChildren(panel);
+}
+
+// Alerts settings: a webhook sink (Discord/Slack/ntfy/custom) + optional
+// email. Alerts fire on metadata only — finder messages and Lost-Deck
+// check-ins — so this never weakens the zero-knowledge guarantee.
+async function alertsModal() {
+  let cur = { webhook: '', email: '', email_enabled: false };
+  try { cur = await api('GET', '/v1/notify'); } catch { /* show blank */ }
+  const dlg = h(`
+    <dialog class="glass" style="border:1px solid var(--glass-brd);color:var(--ink);max-width:440px;background:var(--glass)">
+      <div style="font-weight:700;font-size:18px;margin-bottom:2px">🔔 Alerts</div>
+      <p class="muted" style="font-size:13px;margin-top:4px">
+        Get pinged when a finder messages you or a Lost Deck checks in. Metadata only — never your location.</p>
+      <label>Webhook URL <span class="faint">(Discord / Slack / ntfy / any https)</span></label>
+      <input id="wh" placeholder="https://discord.com/api/webhooks/…" value="${esc(cur.webhook)}">
+      <label style="margin-top:10px">Email ${cur.email_enabled ? '' : '<span class="faint">(inactive — no mail provider configured)</span>'}</label>
+      <input id="em" type="email" placeholder="you@example.com" value="${esc(cur.email)}">
+      <div id="amsg" class="faint" style="min-height:16px;margin-top:8px"></div>
+      <div class="row" style="margin-top:8px;justify-content:space-between">
+        <button class="ghost" id="atest" type="button">Send test</button>
+        <div class="row" style="gap:8px">
+          <button class="ghost" id="acancel" type="button">Close</button>
+          <button class="primary" id="asave" type="button">Save</button>
+        </div>
+      </div>
+    </dialog>`);
+  document.body.append(dlg);
+  const msg = dlg.querySelector('#amsg');
+  const vals = () => ({ webhook: dlg.querySelector('#wh').value.trim(), email: dlg.querySelector('#em').value.trim() });
+  dlg.querySelector('#asave').onclick = async () => {
+    try { await api('PUT', '/v1/notify', vals()); msg.textContent = '✅ Saved.'; }
+    catch (e) { msg.textContent = e.message; }
+  };
+  dlg.querySelector('#atest').onclick = async () => {
+    msg.textContent = 'Saving + sending…';
+    try { await api('PUT', '/v1/notify', vals()); await api('POST', '/v1/notify/test'); msg.textContent = '📨 Test sent — check your sink.'; }
+    catch (e) { msg.textContent = e.message; }
+  };
+  dlg.querySelector('#acancel').onclick = () => { dlg.close(); dlg.remove(); };
+  dlg.showModal();
 }
 
 function timeAgo(ts) {

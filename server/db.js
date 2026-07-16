@@ -13,8 +13,10 @@ pg.types.setTypeParser(20, Number);
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS accounts (
-    account_key TEXT PRIMARY KEY,
-    created_at  BIGINT NOT NULL
+    account_key    TEXT PRIMARY KEY,
+    created_at     BIGINT NOT NULL,
+    notify_webhook TEXT,              -- owner alert sink (Discord/Slack/ntfy/custom)
+    notify_email   TEXT               -- owner alert email (needs an email provider key)
   );
   CREATE TABLE IF NOT EXISTS devices (
     device_id   TEXT PRIMARY KEY,
@@ -29,6 +31,9 @@ const SCHEMA = `
     mode        TEXT NOT NULL DEFAULT 'normal',
     ring_counter BIGINT NOT NULL DEFAULT 0,   -- owner-triggered "play sound"
     last_seen   BIGINT,
+    -- Alert bookkeeping (metadata only — never location/battery):
+    lost_checkin_notified BOOLEAN NOT NULL DEFAULT false,  -- fired "it checked in"
+    lost_quiet_notified   BOOLEAN NOT NULL DEFAULT false,  -- fired "gone quiet"
     created_at  BIGINT NOT NULL
   );
   CREATE TABLE IF NOT EXISTS reports (
@@ -69,6 +74,10 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_relay_msgs ON relay_messages(contact, id);
   -- Migrations for existing databases (no-ops on a fresh one):
   ALTER TABLE devices ADD COLUMN IF NOT EXISTS ring_counter BIGINT NOT NULL DEFAULT 0;
+  ALTER TABLE devices ADD COLUMN IF NOT EXISTS lost_checkin_notified BOOLEAN NOT NULL DEFAULT false;
+  ALTER TABLE devices ADD COLUMN IF NOT EXISTS lost_quiet_notified BOOLEAN NOT NULL DEFAULT false;
+  ALTER TABLE accounts ADD COLUMN IF NOT EXISTS notify_webhook TEXT;
+  ALTER TABLE accounts ADD COLUMN IF NOT EXISTS notify_email TEXT;
   -- Collapse the old covert 'stolen' mode into 'lost'.
   UPDATE devices SET mode = 'lost' WHERE mode = 'stolen';
 `;

@@ -128,6 +128,16 @@ Enrolling a Deck needs both physical possession of it **and** your authenticated
 
 Failed uploads park the already-sealed blob in a disk outbox and drain oldest-first on the next network touch. Marking the Deck recovered (`→ normal`) clears the relay chat automatically.
 
+## Alerts (metadata-only)
+
+Point a webhook (Discord / Slack / ntfy / any https sink) — or an email, if a mail provider key is configured — at your account and get pinged when it matters:
+
+- **A finder messaged you** through the recovery relay.
+- **Your Lost Deck checked in** — the first report after you mark it Lost ("it's alive, location updated").
+- **Your Lost Deck went quiet** — no check-in for 3h while Lost (maybe off or out of range).
+
+These fire on **server-visible metadata only** — a message arrived, a report arrived, a `last_seen` gap. The server still can't read your battery or location (both sealed), so there is deliberately **no** "alert when it leaves home" geofence — that would require reading a location the server never holds. Normal-mode suspend is never alerted (Decks sleep constantly; that would be noise). Webhook targets are https-only with a loopback/private-range SSRF guard.
+
 ## Running it
 
 ```bash

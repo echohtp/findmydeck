@@ -278,3 +278,28 @@ test('report rate limit enforced per device', async () => {
   }
   assert.ok(limited, 'expected a 429 within 40 rapid uploads');
 });
+
+test('notification settings: round-trip + unsafe webhook rejected', async () => {
+  const owner = client();
+  await owner.req('GET', `/auth/dev-login?steamid=${OWNER}`);
+
+  // https public URL + email persist and read back.
+  const ok = await owner.req('PUT', '/v1/notify', {
+    body: { webhook: 'https://discord.com/api/webhooks/x/y', email: 'me@example.com' },
+  });
+  assert.equal(ok.status, 200);
+  const got = await owner.req('GET', '/v1/notify');
+  assert.equal(got.body.webhook, 'https://discord.com/api/webhooks/x/y');
+  assert.equal(got.body.email, 'me@example.com');
+
+  // SSRF guard: http and private/loopback hosts are refused.
+  for (const bad of ['http://discord.com/x', 'https://127.0.0.1/x', 'https://169.254.169.254/latest']) {
+    const r = await owner.req('PUT', '/v1/notify', { body: { webhook: bad } });
+    assert.equal(r.status, 400, `expected 400 for ${bad}`);
+  }
+  // Invalid email refused.
+  assert.equal((await owner.req('PUT', '/v1/notify', { body: { email: 'nope' } })).status, 400);
+
+  // A session is required.
+  assert.equal((await client().req('GET', '/v1/notify')).status, 401);
+});
