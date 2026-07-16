@@ -316,40 +316,42 @@ function injectLoginFx() {
   if (loginFxInjected) return;
   loginFxInjected = true;
   document.head.append(h(`<style>
-    .lf-root{position:fixed;inset:0;z-index:20;overflow-y:auto;pointer-events:none;
+    .lf-root{position:fixed;inset:0;z-index:20;overflow:hidden;pointer-events:none;
       background:linear-gradient(90deg, rgba(7,10,18,.94) 0%, rgba(7,10,18,.86) 32%, rgba(7,10,18,.45) 62%, rgba(7,10,18,.18) 100%)}
     .lf-glow{position:fixed;top:-24vh;left:8vw;width:70vw;height:70vh;pointer-events:none;
       background:radial-gradient(closest-side, rgba(56,189,248,.14), transparent 70%);filter:blur(24px)}
-    .lf-wrap{min-height:100%;display:flex;flex-direction:column;padding:18px clamp(14px,4vw,44px) 24px;box-sizing:border-box}
-    .lf-nav{pointer-events:auto;display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-radius:14px}
+    .lf-wrap{height:100%;display:flex;flex-direction:column;padding:16px clamp(14px,4vw,44px) 16px;box-sizing:border-box}
+    .lf-nav{pointer-events:auto;display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-radius:14px;flex:none}
     .lf-gh{font-size:13px}
-    .lf-hero{flex:1;display:flex;align-items:center;justify-content:flex-start;padding:4vh 0}
-    .lf-card{pointer-events:auto;max-width:480px;width:100%;padding:clamp(26px,3.4vw,40px);text-align:left;position:relative;
+    .lf-hero{flex:1;min-height:0;display:flex;align-items:center;justify-content:flex-start;padding:1.5vh 0}
+    .lf-card{pointer-events:auto;max-width:480px;width:100%;padding:clamp(20px,2.6vw,32px);text-align:left;position:relative;
       border-radius:22px;box-shadow:0 30px 90px rgba(0,0,0,.6);animation:lf-rise .7s cubic-bezier(.2,.8,.2,1) both}
     .lf-card::before{content:"";position:absolute;inset:0;border-radius:22px;padding:1px;pointer-events:none;
       background:linear-gradient(140deg, rgba(56,189,248,.55), rgba(139,92,246,.35) 40%, transparent 70%);
       -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
-    .lf-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;letter-spacing:1.6px;
+    .lf-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:1.5px;
       color:var(--accent);background:rgba(56,189,248,.10);border:1px solid rgba(56,189,248,.22);
-      padding:6px 12px;border-radius:999px}
+      padding:5px 11px;border-radius:999px}
     .lf-live{width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 0 0 rgba(52,211,153,.7);animation:lf-blip 1.8s infinite}
-    .lf-h1{font-size:clamp(32px,5.4vw,52px);line-height:1.04;margin:16px 0 14px;letter-spacing:-1px;font-weight:800}
+    .lf-h1{font-size:clamp(28px,4.2vw,44px);line-height:1.05;margin:12px 0 10px;letter-spacing:-1px;font-weight:800}
     .lf-grad{background:linear-gradient(100deg,#7dd3fc,#38bdf8 40%,#818cf8);-webkit-background-clip:text;background-clip:text;
       -webkit-text-fill-color:transparent;background-size:200% auto;animation:lf-shine 6s linear infinite}
-    .lf-sub{font-size:16.5px;line-height:1.6;margin:0;max-width:440px}
-    .lf-cta{margin-top:26px;display:flex;gap:12px;justify-content:flex-start;flex-wrap:wrap}
-    .lf-primary{font-size:16px;padding:14px 26px;box-shadow:0 10px 30px rgba(56,189,248,.35)}
+    .lf-sub{font-size:15.5px;line-height:1.55;margin:0;max-width:440px}
+    .lf-cta{margin-top:20px;display:flex;gap:12px;justify-content:flex-start;flex-wrap:wrap}
+    .lf-primary{font-size:15px;padding:12px 22px;box-shadow:0 10px 30px rgba(56,189,248,.35)}
     .lf-primary:hover{transform:translateY(-1px)}
-    .lf-ghost2{font-size:16px;padding:14px 22px;background:rgba(255,255,255,.05)}
-    .lf-chips{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin-top:18px}
+    .lf-ghost2{font-size:15px;padding:12px 20px;background:rgba(255,255,255,.05)}
+    .lf-chips{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin-top:14px}
     .lf-chip{font-size:12px;color:var(--ink-dim);background:rgba(255,255,255,.05);border:1px solid var(--glass-brd);
       padding:5px 11px;border-radius:999px}
-    .lf-feats{display:grid;grid-template-columns:1fr;gap:13px;margin-top:24px;padding-top:22px;border-top:1px solid var(--glass-brd);text-align:left}
-    .lf-feat{display:flex;gap:11px;align-items:flex-start}
-    .lf-feat-ic{font-size:20px;line-height:1;flex:none;margin-top:1px}
-    .lf-feat-t{font-weight:700;font-size:14.5px;margin-bottom:3px}
-    .lf-feat-b{font-size:12.5px;line-height:1.5}
-    .lf-foot{pointer-events:auto;text-align:center;margin:6px 0 0}
+    .lf-feats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:18px;padding-top:16px;border-top:1px solid var(--glass-brd);text-align:left}
+    .lf-feat{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+    .lf-feat-ic{font-size:19px;line-height:1}
+    .lf-feat-t{font-weight:700;font-size:13px;line-height:1.25}
+    .lf-feat-b{font-size:11.5px;line-height:1.45}
+    .lf-foot{pointer-events:auto;text-align:center;margin:0;flex:none;font-size:10.5px}
+    @media(max-height:720px){.lf-feat-b{display:none}.lf-h1{font-size:clamp(26px,3.6vw,38px)}.lf-sub{font-size:14.5px}}
+    @media(max-width:560px){.lf-feats{grid-template-columns:1fr}.lf-feat{flex-direction:row;gap:10px}}
     .lf-radar{position:relative;width:26px;height:26px}
     .lf-radar .lf-core{position:absolute;inset:9px;border-radius:50%;background:#f2585b;box-shadow:0 0 14px 3px rgba(242,88,91,.8)}
     .lf-radar .lf-ring{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(242,88,91,.7);animation:lf-radar 2.4s ease-out infinite}
@@ -485,17 +487,16 @@ function renderShell() {
 // email. Alerts fire on metadata only — finder messages and Lost-Deck
 // check-ins — so this never weakens the zero-knowledge guarantee.
 async function alertsModal() {
-  let cur = { webhook: '', email: '', email_enabled: false };
+  let cur = { webhook: '' };
   try { cur = await api('GET', '/v1/notify'); } catch { /* show blank */ }
   const dlg = h(`
     <dialog class="glass" style="border:1px solid var(--glass-brd);color:var(--ink);max-width:440px;background:var(--glass)">
       <div style="font-weight:700;font-size:18px;margin-bottom:2px">🔔 Alerts</div>
       <p class="muted" style="font-size:13px;margin-top:4px">
-        Get pinged when a finder messages you or a Lost Deck checks in. Metadata only — never your location.</p>
+        Get pinged when a finder messages you or a Lost Deck checks in or goes quiet. Metadata only — never your location.</p>
       <label>Webhook URL <span class="faint">(Discord / Slack / ntfy / any https)</span></label>
       <input id="wh" placeholder="https://discord.com/api/webhooks/…" value="${esc(cur.webhook)}">
-      <label style="margin-top:10px">Email ${cur.email_enabled ? '' : '<span class="faint">(inactive — no mail provider configured)</span>'}</label>
-      <input id="em" type="email" placeholder="you@example.com" value="${esc(cur.email)}">
+      <div class="faint" style="font-size:11.5px;margin-top:6px">Tip: a Discord channel → Integrations → Webhooks gives you a URL in seconds.</div>
       <div id="amsg" class="faint" style="min-height:16px;margin-top:8px"></div>
       <div class="row" style="margin-top:8px;justify-content:space-between">
         <button class="ghost" id="atest" type="button">Send test</button>
@@ -507,7 +508,7 @@ async function alertsModal() {
     </dialog>`);
   document.body.append(dlg);
   const msg = dlg.querySelector('#amsg');
-  const vals = () => ({ webhook: dlg.querySelector('#wh').value.trim(), email: dlg.querySelector('#em').value.trim() });
+  const vals = () => ({ webhook: dlg.querySelector('#wh').value.trim() });
   dlg.querySelector('#asave').onclick = async () => {
     try { await api('PUT', '/v1/notify', vals()); msg.textContent = '✅ Saved.'; }
     catch (e) { msg.textContent = e.message; }

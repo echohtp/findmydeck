@@ -130,7 +130,7 @@ Failed uploads park the already-sealed blob in a disk outbox and drain oldest-fi
 
 ## Alerts (metadata-only)
 
-Point a webhook (Discord / Slack / ntfy / any https sink) — or an email, if a mail provider key is configured — at your account and get pinged when it matters:
+Point a webhook (Discord / Slack / ntfy / any https sink) at your account and get pinged when it matters (email delivery is wired but off until a mail-provider key is set):
 
 - **A finder messaged you** through the recovery relay.
 - **Your Lost Deck checked in** — the first report after you mark it Lost ("it's alive, location updated").
