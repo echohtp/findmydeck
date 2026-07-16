@@ -60,6 +60,7 @@ function ensureMap() {
   const saved = localStorage.getItem('fmsd_basemap');
   (bases[saved] || bases['🌑 Dark']).addTo(map);
   L.control.layers(bases, null, { position: 'bottomright', collapsed: true }).addTo(map);
+  L.control.scale({ metric: true, imperial: true, position: 'bottomleft' }).addTo(map);
   map.on('baselayerchange', (e) => localStorage.setItem('fmsd_basemap', e.name));
   layerGroup = L.layerGroup().addTo(map);
   return map;
@@ -78,12 +79,51 @@ function markerIcon(latest) {
 // array (newest-first) so the history list can focus any one of them.
 let fixMarkers = [];
 
+// Great-circle distance in metres between [lat,lon] pairs.
+function metersBetween(a, b) {
+  const R = 6371000, toRad = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * toRad, dLon = (b[1] - a[1]) * toRad;
+  const s = Math.sin(dLat / 2) ** 2
+    + Math.cos(a[0] * toRad) * Math.cos(b[0] * toRad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+// Collapse fixes at the "same place" into one point. Two fixes are the same
+// place when their centres fall within each other's error (or ~20 m floor) —
+// Wi-Fi fixes jitter tens of metres while stationary, so this de-noises the
+// map into places visited, each with a visit count and a time span.
+function clusterFixes(fixes) {
+  const clusters = [];
+  for (const f of fixes) {
+    const c = clusters.find((cl) =>
+      metersBetween([cl.lat, cl.lon], [f.lat, f.lon]) <= Math.max(cl.accuracy, f.accuracy, 20));
+    if (c) {
+      c.members.push(f);
+      c.lat = c.members.reduce((s, m) => s + m.lat, 0) / c.members.length;
+      c.lon = c.members.reduce((s, m) => s + m.lon, 0) / c.members.length;
+      c.accuracy = Math.min(c.accuracy, f.accuracy);
+      c.first = Math.min(c.first, f.ts);
+      c.last = Math.max(c.last, f.ts);
+    } else {
+      clusters.push({
+        lat: f.lat, lon: f.lon, accuracy: f.accuracy, members: [f],
+        first: f.ts, last: f.ts, ts: f.ts, batt: f.batt, ssid: f.ssid,
+      });
+    }
+  }
+  // ts = most recent sighting; keep clusters newest-first (fixes came in that order).
+  clusters.forEach((c) => { c.ts = c.last; c.count = c.members.length; });
+  return clusters;
+}
+
 function fixPopupHtml(f, latest, meta) {
-  const when = new Date(f.ts).toLocaleString();
-  return `<div style="min-width:160px">
-      <b style="color:${latest ? '#f2585b' : '#38bdf8'}">${latest ? '📍 Latest position' : 'Earlier position'}</b><br>
+  const span = f.count > 1
+    ? `Seen ${f.count}× · ${new Date(f.first).toLocaleString()} → ${new Date(f.last).toLocaleString()}`
+    : new Date(f.ts).toLocaleString();
+  return `<div style="min-width:170px">
+      <b style="color:${latest ? '#f2585b' : '#38bdf8'}">${latest ? '📍 Latest place' : 'Earlier place'}</b><br>
       ${meta.name ? `<b>${esc(meta.name)}</b><br>` : ''}
-      ${when}<br>
+      ${span}<br>
       Accuracy ±${Math.round(f.accuracy)} m
       ${f.ssid ? `<br>Wi-Fi “${esc(f.ssid)}”` : ''}
       ${f.batt >= 0 ? `<br>Battery ${Math.round(f.batt * 100)}%` : ''}
@@ -505,18 +545,20 @@ async function locateFlow(d, body) {
     for (const r of reports.slice(0, 100)) {
       try { const f = await resolveWifi(r.wifi || []); if (f) fixes.push({ ...f, ts: r.ts, batt: r.batt, ssid: r.ssid }); else noMatch += 1; } catch { noMatch += 1; }
     }
-    plotFixes(fixes, { name: d.name });
+    // Collapse jittery same-place pings into distinct places before plotting.
+    const places = clusterFixes(fixes);
+    plotFixes(places, { name: d.name });
 
     const recurring = btRecurrence(reports);
     out.innerHTML = '';
     out.append(closeBar(out, 'Location'));
     out.append(h(`<div class="glass" style="padding:12px">
-      <div class="kv"><span class="k">Fixes plotted</span><span class="v">${fixes.length}</span></div>
-      <div class="kv"><span class="k">Latest fix</span><span class="v">${fixes[0] ? '±' + Math.round(fixes[0].accuracy) + 'm' : '—'}</span></div>
+      <div class="kv"><span class="k">Places</span><span class="v">${places.length}</span></div>
+      <div class="kv"><span class="k">Latest place</span><span class="v">${places[0] ? '±' + Math.round(places[0].accuracy) + 'm' : '—'}</span></div>
       <div class="kv"><span class="k">Reports</span><span class="v">${reports.length}</span></div>
       ${noMatch ? `<div class="kv"><span class="k">No Wi-Fi match</span><span class="v">${noMatch}</span></div>` : ''}
     </div>`));
-    if (!fixes.length) {
+    if (!places.length) {
       out.append(h(`<div class="faint">No Wi-Fi-based fix yet. beacondb/Apple didn't recognize these access points — a scan with more nearby networks, or a busier area, resolves better.</div>`));
     }
     if (recurring.length) {
@@ -526,19 +568,21 @@ async function locateFlow(d, body) {
       </div>`));
     }
 
-    // History — every located fix over the retained window (7 days), newest
-    // first. Click a row to fly the map to that point.
-    if (fixes.length) {
+    // History — distinct places over the retained window (7 days), newest
+    // first. Nearby jittery pings are clustered into one place with a visit
+    // count. Click a row to fly the map to it.
+    if (places.length) {
       const hist = h(`<div class="glass" style="padding:10px">
-        <div class="faint" style="margin-bottom:6px">History · ${fixes.length} location${fixes.length > 1 ? 's' : ''} (last 7 days)</div>
+        <div class="faint" style="margin-bottom:6px">History · ${places.length} place${places.length > 1 ? 's' : ''} (last 7 days)</div>
         <div class="histlist"></div></div>`);
       const list = hist.querySelector('.histlist');
-      fixes.forEach((f, i) => {
-        const row = h(`<button class="histrow${i === 0 ? ' latest' : ''}" title="${esc(new Date(f.ts).toLocaleString())}">
+      places.forEach((p, i) => {
+        const visits = p.count > 1 ? `${p.count} pings · ` : '';
+        const row = h(`<button class="histrow${i === 0 ? ' latest' : ''}" title="${esc(new Date(p.first).toLocaleString())} → ${esc(new Date(p.last).toLocaleString())}">
           <span class="hr-dot"></span>
           <span class="hr-main">
-            <span class="hr-when">${i === 0 ? 'Latest · ' : ''}${timeAgo(f.ts)}</span>
-            <span class="hr-sub">${f.ssid ? '📶 ' + esc(f.ssid) + ' · ' : ''}±${Math.round(f.accuracy)} m${f.batt >= 0 ? ' · 🔋 ' + Math.round(f.batt * 100) + '%' : ''}</span>
+            <span class="hr-when">${i === 0 ? 'Latest · ' : ''}${timeAgo(p.last)}</span>
+            <span class="hr-sub">${p.ssid ? '📶 ' + esc(p.ssid) + ' · ' : ''}${visits}±${Math.round(p.accuracy)} m${p.batt >= 0 ? ' · 🔋 ' + Math.round(p.batt * 100) + '%' : ''}</span>
           </span></button>`);
         row.onclick = () => focusFix(i);
         list.append(row);

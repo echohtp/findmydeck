@@ -23,7 +23,33 @@
     .leaflet-container { background: #0a0f18 !important; font: inherit; }
     .leaflet-control-attribution { background: rgba(10,15,24,.6) !important; color: var(--ink-faint) !important; }
     .leaflet-control-attribution a { color: var(--ink-dim) !important; }
-    .leaflet-bar a { background: var(--glass) !important; color: var(--ink) !important; border-color: var(--glass-brd) !important; }
+    /* zoom control — glass, rounded, with a tick divider between +/- */
+    .leaflet-bar { border: none !important; border-radius: 12px !important; overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,.45) !important; }
+    .leaflet-bar a { background: var(--glass) !important; color: var(--ink) !important;
+      backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+      width: 34px !important; height: 34px !important; line-height: 34px !important; font-size: 19px !important;
+      border: none !important; border-bottom: 1px solid var(--glass-brd) !important; transition: background .15s, color .15s; }
+    .leaflet-bar a:last-child { border-bottom: none !important; }
+    .leaflet-bar a:hover { background: rgba(56,189,248,.16) !important; color: var(--accent) !important; }
+    .leaflet-bar a.leaflet-disabled { opacity: .35 !important; }
+
+    /* layers switcher — glass pill toggle + glass panel when open */
+    .leaflet-control-layers { border: none !important; border-radius: 12px !important;
+      background: var(--glass) !important; color: var(--ink) !important;
+      backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+      box-shadow: 0 8px 24px rgba(0,0,0,.45) !important; }
+    .leaflet-control-layers-toggle { width: 38px !important; height: 38px !important;
+      background-size: 20px 20px !important; }
+    .leaflet-control-layers-expanded { padding: 10px 14px 10px 10px !important; }
+    .leaflet-control-layers label { font-size: 13px; font-weight: 600; margin: 3px 0; display: flex; align-items: center; gap: 7px; }
+    .leaflet-control-layers-selector { accent-color: var(--accent); }
+
+    /* scale bar — distance tick marks */
+    .leaflet-control-scale-line { background: var(--glass) !important; color: var(--ink-dim) !important;
+      border: 1px solid var(--glass-brd) !important; border-top: none !important; border-radius: 0 0 6px 6px;
+      padding: 2px 8px !important; font-size: 11px; font-weight: 600;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 
     /* floating layer */
     .layer { position: fixed; z-index: 10; }

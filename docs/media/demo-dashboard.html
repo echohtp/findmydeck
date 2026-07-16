@@ -23,7 +23,33 @@
     .leaflet-container { background: #0a0f18 !important; font: inherit; }
     .leaflet-control-attribution { background: rgba(10,15,24,.6) !important; color: var(--ink-faint) !important; }
     .leaflet-control-attribution a { color: var(--ink-dim) !important; }
-    .leaflet-bar a { background: var(--glass) !important; color: var(--ink) !important; border-color: var(--glass-brd) !important; }
+    /* zoom control — glass, rounded, with a tick divider between +/- */
+    .leaflet-bar { border: none !important; border-radius: 12px !important; overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,.45) !important; }
+    .leaflet-bar a { background: var(--glass) !important; color: var(--ink) !important;
+      backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+      width: 34px !important; height: 34px !important; line-height: 34px !important; font-size: 19px !important;
+      border: none !important; border-bottom: 1px solid var(--glass-brd) !important; transition: background .15s, color .15s; }
+    .leaflet-bar a:last-child { border-bottom: none !important; }
+    .leaflet-bar a:hover { background: rgba(56,189,248,.16) !important; color: var(--accent) !important; }
+    .leaflet-bar a.leaflet-disabled { opacity: .35 !important; }
+
+    /* layers switcher — glass pill toggle + glass panel when open */
+    .leaflet-control-layers { border: none !important; border-radius: 12px !important;
+      background: var(--glass) !important; color: var(--ink) !important;
+      backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3);
+      box-shadow: 0 8px 24px rgba(0,0,0,.45) !important; }
+    .leaflet-control-layers-toggle { width: 38px !important; height: 38px !important;
+      background-size: 20px 20px !important; }
+    .leaflet-control-layers-expanded { padding: 10px 14px 10px 10px !important; }
+    .leaflet-control-layers label { font-size: 13px; font-weight: 600; margin: 3px 0; display: flex; align-items: center; gap: 7px; }
+    .leaflet-control-layers-selector { accent-color: var(--accent); }
+
+    /* scale bar — distance tick marks */
+    .leaflet-control-scale-line { background: var(--glass) !important; color: var(--ink-dim) !important;
+      border: 1px solid var(--glass-brd) !important; border-top: none !important; border-radius: 0 0 6px 6px;
+      padding: 2px 8px !important; font-size: 11px; font-weight: 600;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 
     /* floating layer */
     .layer { position: fixed; z-index: 10; }
@@ -77,6 +103,11 @@
       background: transparent; border: 1px solid transparent; }
     .devbtn:hover { background: rgba(255,255,255,.06); }
     .devbtn.active { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.35); }
+    .devbtn .chev { font-size: 12px; opacity: .55; transition: transform .18s ease; }
+    .devbtn.open .chev { transform: rotate(90deg); }
+    .drawer { display: flex; flex-direction: column; gap: 8px; padding: 10px 4px 4px;
+      margin: 2px 0 4px; border-top: 1px solid var(--glass-brd); animation: drawer .18s ease; }
+    @keyframes drawer { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
     .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
     .dot.normal { background: var(--normal); } .dot.lost { background: var(--lost); } .dot.stolen { background: var(--stolen); }
 
@@ -105,6 +136,17 @@
     a { color: var(--accent); }
     .empty { text-align: center; color: var(--ink-dim); padding: 24px 8px; }
 
+    /* location history */
+    .histlist { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 0 -2px; }
+    .histrow { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left;
+      background: transparent; border: 0; border-radius: 8px; padding: 7px 8px; cursor: pointer; color: var(--ink); }
+    .histrow:hover { background: rgba(255,255,255,.06); }
+    .histrow .hr-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+    .histrow.latest .hr-dot { background: #f2585b; box-shadow: 0 0 8px rgba(242,88,91,.7); }
+    .hr-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .hr-when { font-size: 13px; font-weight: 600; }
+    .hr-sub { font-size: 11px; color: var(--ink-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
     /* map markers */
     .pin { border-radius: 50%; border: 2px solid #0a0f18; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
     .pin-latest { animation: pulse 2s ease-out infinite; }
@@ -127,13 +169,19 @@
     // --- self-contained mock: hardcoded fake data, no server, no fetch ---
     const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; };
 
-    // Austin, TX. Newest-first trail (latest at index 0).
+    // Austin, TX. Clustered PLACES (newest-first, latest at index 0). Each place
+    // is a de-noised centre of nearby Wi-Fi pings, with a visit count + time span.
     const CENTER = [30.2672, -97.7431];
-    const fixes = [
-      { lat: 30.26720, lon: -97.74310, accuracy: 42, batt: 0.63, label: '2m ago' },
-      { lat: 30.26845, lon: -97.74060, accuracy: 55, batt: 0.66, label: '19m ago' },
-      { lat: 30.27010, lon: -97.73790, accuracy: 61, batt: 0.71, label: '48m ago' },
-      { lat: 30.27120, lon: -97.73520, accuracy: 88, batt: 0.74, label: '1h ago' },
+    const places = [
+      { lat: 30.26720, lon: -97.74310, accuracy: 38, batt: 0.63, count: 6,
+        ssid: 'SpectrumSetup-02A0', when: 'Latest · 2m ago',
+        span: 'Seen 6× · 7/15/2026, 2:38:11 PM → 7/15/2026, 3:16:44 PM' },
+      { lat: 30.26980, lon: -97.73840, accuracy: 52, batt: 0.71, count: 3,
+        ssid: 'Mozzarella-5G', when: '3h ago',
+        span: 'Seen 3× · 7/15/2026, 11:52:03 AM → 7/15/2026, 12:19:37 PM' },
+      { lat: 30.27210, lon: -97.73380, accuracy: 44, batt: 0.44, count: 1,
+        ssid: 'CoffeeShop_Guest', when: '1d ago',
+        span: '7/14/2026, 4:07:52 PM' },
     ];
 
     const map = L.map('map', { zoomControl: true, attributionControl: true }).setView(CENTER, 15);
@@ -150,6 +198,7 @@
     };
     bases['🌑 Dark'].addTo(map);
     L.control.layers(bases, null, { position: 'bottomright', collapsed: true }).addTo(map);
+    L.control.scale({ metric: true, imperial: true, position: 'bottomleft' }).addTo(map);
     const layerGroup = L.layerGroup().addTo(map);
 
     function markerIcon(latest) {
@@ -161,20 +210,22 @@
       });
     }
 
-    const pts = fixes.map((f) => [f.lat, f.lon]); // newest-first
+    // Dashed cyan trail connecting the 3 place-centres.
+    const pts = places.map((p) => [p.lat, p.lon]); // newest-first
     L.polyline([...pts].reverse(), { color: '#38bdf8', weight: 2, opacity: 0.5, dashArray: '4 6' }).addTo(layerGroup);
 
     let latestMarker = null;
-    fixes.forEach((f, i) => {
+    places.forEach((p, i) => {
       const latest = i === 0;
-      L.circle([f.lat, f.lon], { radius: f.accuracy, color: latest ? '#f2585b' : '#38bdf8', weight: 1, opacity: 0.4, fillOpacity: 0.06 }).addTo(layerGroup);
-      const mk = L.marker([f.lat, f.lon], { icon: markerIcon(latest) }).addTo(layerGroup);
-      mk.bindPopup(`<div style="min-width:160px">
-          <b style="color:${latest ? '#f2585b' : '#38bdf8'}">${latest ? '📍 Latest position' : 'Earlier position'}</b><br>
+      L.circle([p.lat, p.lon], { radius: p.accuracy, color: latest ? '#f2585b' : '#38bdf8', weight: 1, opacity: 0.4, fillOpacity: 0.06 }).addTo(layerGroup);
+      const mk = L.marker([p.lat, p.lon], { icon: markerIcon(latest) }).addTo(layerGroup);
+      mk.bindPopup(`<div style="min-width:170px">
+          <b style="color:${latest ? '#f2585b' : '#38bdf8'}">${latest ? '📍 Latest place' : 'Earlier place'}</b><br>
           <b>banana's Deck</b><br>
-          ${f.label}<br>
-          Accuracy ±${Math.round(f.accuracy)} m
-          <br>Battery ${Math.round(f.batt * 100)}%
+          ${p.span}<br>
+          Accuracy ±${Math.round(p.accuracy)} m
+          <br>Wi-Fi “${p.ssid}”
+          <br>Battery ${Math.round(p.batt * 100)}%
         </div>`);
       if (latest) latestMarker = mk;
     });
@@ -188,40 +239,67 @@
           <button class="ghost" title="Sign out">⎋</button>
         </div>
         <div class="panel-bd col">
-          <button class="devbtn active">
+          <button class="devbtn active open">
             <span class="dot normal"></span>
             <span style="flex:1">
               <div style="font-weight:600">banana's Deck</div>
               <div class="faint">seen 2m ago</div>
             </span>
             <span class="pill normal">normal</span>
+            <span class="chev">▸</span>
           </button>
 
-          <div style="height:1px;background:var(--glass-brd);margin:4px 0"></div>
-
-          <div>
-            <label>Mode</label>
-            <div class="seg">
-              <button class="on normal">Normal</button>
-              <button>Lost</button>
+          <div class="drawer col">
+            <div>
+              <label>Mode</label>
+              <div class="seg">
+                <button class="on normal">Normal</button>
+                <button>Lost</button>
+              </div>
             </div>
-          </div>
-          <input placeholder="Message shown to finder (lost mode)">
+            <input id="lostmsg" placeholder="Message shown to finder (lost mode)">
 
-          <button class="primary" style="width:100%">🔊 Play sound on Deck</button>
+            <button class="primary" style="width:100%">🔊 Play sound on Deck</button>
 
-          <div class="row">
-            <button class="primary" style="flex:1">📍 Locate</button>
-            <button style="flex:1">✉ Messages</button>
-          </div>
+            <div class="row">
+              <button class="primary" style="flex:1">📍 Locate</button>
+              <button style="flex:1">✉ Messages</button>
+            </div>
 
-          <button class="ghost danger" style="width:100%">Revoke this Deck</button>
+            <button class="ghost danger" style="width:100%">Revoke this Deck</button>
 
-          <div class="glass" style="padding:12px">
-            <div class="kv"><span class="k">Fixes plotted</span><span class="v">4</span></div>
-            <div class="kv"><span class="k">Latest fix</span><span class="v">±42 m</span></div>
-            <div class="kv"><span class="k">Battery</span><span class="v">63%</span></div>
-            <div class="kv"><span class="k">Reports</span><span class="v">37</span></div>
+            <div class="glass" style="padding:12px">
+              <div class="kv"><span class="k">Places</span><span class="v">3</span></div>
+              <div class="kv"><span class="k">Latest place</span><span class="v">±38 m</span></div>
+              <div class="kv"><span class="k">Reports</span><span class="v">27</span></div>
+            </div>
+
+            <div class="glass" style="padding:10px">
+              <div class="faint" style="margin-bottom:6px">History · 3 places (last 7 days)</div>
+              <div class="histlist">
+                <button class="histrow latest">
+                  <span class="hr-dot"></span>
+                  <span class="hr-main">
+                    <span class="hr-when">Latest · 2m ago</span>
+                    <span class="hr-sub">📶 SpectrumSetup-02A0 · 6 pings · ±38 m · 🔋 63%</span>
+                  </span>
+                </button>
+                <button class="histrow">
+                  <span class="hr-dot"></span>
+                  <span class="hr-main">
+                    <span class="hr-when">3h ago</span>
+                    <span class="hr-sub">📶 Mozzarella-5G · 3 pings · ±52 m · 🔋 71%</span>
+                  </span>
+                </button>
+                <button class="histrow">
+                  <span class="hr-dot"></span>
+                  <span class="hr-main">
+                    <span class="hr-when">1d ago</span>
+                    <span class="hr-sub">📶 CoffeeShop_Guest · ±44 m · 🔋 44%</span>
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <div style="padding:12px 16px;border-top:1px solid var(--glass-brd)">
